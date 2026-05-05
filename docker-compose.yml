@@ -146,6 +146,8 @@ services:
   #      # --- Yandex Cloud ---
   #      YANDEX_CLOUD_FOLDER_ID: ${YANDEX_CLOUD_FOLDER_ID}
   #      YANDEX_CLOUD_API_KEY: ${YANDEX_CLOUD_API_KEY}
+  #      YANDEX_CLOUD_ACCESS_KEY_ID: ${YANDEX_CLOUD_ACCESS_KEY_ID}
+  #      YANDEX_CLOUD_SECRET_ACCESS_KEY: ${YANDEX_CLOUD_SECRET_ACCESS_KEY}
   #   depends_on:
   #     postgres:
   #       condition: service_healthy
