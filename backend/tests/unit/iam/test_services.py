@@ -6,7 +6,7 @@ import pytest
 from faker import Faker
 from freezegun import freeze_time
 
-from src.iam.domain.exceptions import InvitationExpiredError
+from src.iam.domain.exceptions import InvitationExpiredError, UnauthorizedError
 from src.iam.domain.services import (
     create_account_manager,
     create_admin,
@@ -263,6 +263,25 @@ class TestAuthServiceAuthenticate:
         tokens = await mock_auth_service.authenticate(user.email, sample_password)
 
         assert isinstance(tokens, Tokens)
+
+    @pytest.mark.asyncio
+    async def test_failed_authenticate_if_password_wrong(
+            self,
+            sample_password,
+            sample_counterparty_id,
+            mock_user_repo,
+            mock_auth_service,
+    ):
+        # Сохранение пользователя на прямую в БД
+        user = create_customer(
+            email="customer@emample.com",
+            password_hash=hash_password(sample_password),
+            counterparty_id=sample_counterparty_id,
+        )
+        await mock_user_repo.create(user)
+
+        with pytest.raises(UnauthorizedError, match="Invalid password or user is not active"):
+            await mock_auth_service.authenticate(user.email, "wrong_password")
 
 
 class TestInvitationServiceSendInvitation:
