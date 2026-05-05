@@ -44,3 +44,9 @@ class EmailSendingFailedError(AppError):
     status_code = status.HTTP_502_BAD_GATEWAY
     error_code = "EMAIL_SENDING_FAILED"
     public_message = "Не удалось отправить письмо. Попробуйте позже."
+
+
+class RateLimitExceededError(AppError):
+    status_code = status.HTTP_429_TOO_MANY_REQUESTS
+    error_code = "RATE_LIMIT_EXCEEDED"
+    public_message = "Превышен лимит запросов"
