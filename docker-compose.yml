@@ -56,6 +56,11 @@ services:
       - "9900:9000"              # S3 API (для SDK и CLI)
       - "9901:9001"              # Web Console (UI)
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
 
   languagetool:
     image: erikvl87/languagetool:latest
