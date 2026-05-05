@@ -128,7 +128,7 @@ class SqlInvitationRepository(SqlAlchemyRepository[Invitation, InvitationOrm]):
             .where(
                 (self.model.email == email) &
                 (self.model.assigned_role == user_role) &
-                (not self.model.is_used)
+                (self.model.is_used.is_(False))
             )
             .limit(1)
         )
