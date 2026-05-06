@@ -1,7 +1,7 @@
 import logging
 import sys
 
-from pythonjsonlogger.json import jsonlogger
+from pythonjsonlogger.json import JsonFormatter
 
 
 def configure_logging(log_level: str = "INFO"):
@@ -9,7 +9,7 @@ def configure_logging(log_level: str = "INFO"):
 
     log_level = getattr(logging, log_level.upper(), logging.INFO)
 
-    formatter = jsonlogger.JsonFormatter(
+    formatter = JsonFormatter(
         fmt=(
             "%(asctime)s %(levelname)s %(name)s %(message)s %(request_id)s %(lineno)d %(pathname)s"
         ),
