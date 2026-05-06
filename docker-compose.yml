@@ -36,7 +36,7 @@ services:
       - MAILDEV_WEB_PORT=1080
       - MAILDEV_SMTP_PORT=1025
     ports:
-      - "8080:1080"
+      - "8081:1080"
       - "1025:1025"
     logging:
       driver: "json-file"
@@ -219,7 +219,7 @@ services:
       - '--storage.tsdb.retention.time=15d'       # хранить метрики 15 дней
       - '--web.enable-lifecycle'                  # возможность перезагрузки конфига без остановки
     ports:
-      - "9090:9090"
+      - "9091:9090"
     networks:
       - default
 
