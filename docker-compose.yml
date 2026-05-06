@@ -173,7 +173,7 @@ services:
       - "3001:80"
     restart: unless-stopped
     environment:
-      - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
+      VITE_API_URL: ${VITE_API_URL}
     depends_on:
       - backend
 
