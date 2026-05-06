@@ -157,12 +157,17 @@ services:
       YANDEX_CLOUD_API_KEY: ${YANDEX_CLOUD_API_KEY}
       YANDEX_CLOUD_ACCESS_KEY_ID: ${YANDEX_CLOUD_ACCESS_KEY_ID}
       YANDEX_CLOUD_SECRET_ACCESS_KEY: ${YANDEX_CLOUD_SECRET_ACCESS_KEY}
+      # --- Language Tool --
+      LANGTOOL_HOST: ${LANGTOOL_HOST}
+      LNAGTOOL_PORT: ${LANGTOOL_PORT}
     depends_on:
       postgres:
         condition: service_healthy
       maildev:
         condition: service_healthy
       minio:
+        condition: service_healthy
+      languagetool:
         condition: service_healthy
 
   frontend:
