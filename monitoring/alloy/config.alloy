@@ -1,0 +1,15 @@
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+loki.source.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+  targets = [
+    {__meta_docker_container_name = "backend"},  // ваш FastAPI
+    {__meta_docker_container_name = "postgres"},
+    # добавьте остальные
+  ]
+  forward_to = [loki.write.default.receiver]
+}

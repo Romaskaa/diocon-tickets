@@ -3,8 +3,7 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
-  # 1. Ваше FastAPI приложение (когда оно запущено)
   - job_name: 'backend'
-    static_configs:
-      - targets: ['backend:8000']   # имя сервиса в docker-compose и его порт
     metrics_path: '/metrics'
+    static_configs:
+      - targets: ['backend:8000']

@@ -1,0 +1,35 @@
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  instance_addr: 127.0.0.1
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+      storage_path: /loki/data
+
+schema_config:
+  configs:
+    - from: "2024-01-01"
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
+  rule_path: /tmp/loki/rules
+  alertmanager_url: http://alertmanager:9093  # если будете использовать
+  ring:
+    kvstore:
+      store: inmemory
+  enable_api: true
+  enable_sharing: false

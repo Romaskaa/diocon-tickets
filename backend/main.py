@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 
+from src.core.logging import configure_logging
 from src.core.redis import redis_client
 from src.core.settings import settings
 from src.crm.routers import router as counterparty_router
@@ -17,6 +18,7 @@ from src.media.router import router as media_router
 from src.products.routers import router as product_router
 from src.proofreading.router import router as proofreading_router
 from src.shared.domain.exceptions import AppError
+from src.shared.infra.middlewares import LoggingMiddleware
 from src.shared.utils.cli import run_cli_command
 from src.tickets.routers import router as tickets_router
 
@@ -25,7 +27,13 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    # Настройка логирования
+    configure_logging(log_level="INFO")
+
+    # Проверка доступности Redis
     await redis_client.ping()
+
+    # Выполнение необходимых команд для запуска приложения
     await run_cli_command(sys.executable, "-m", "alembic", "upgrade", "head")
     await run_cli_command(sys.executable, "-m", "cli", "create-first-admin")
     await run_cli_command(sys.executable, "-m", "cli", "init-s3-buckets")
@@ -40,7 +48,11 @@ app = FastAPI(
 )
 
 # Prometheus мониторинг
-Instrumentator().instrument(app).expose(app)
+Instrumentator(
+    should_group_status_codes=True,
+    should_group_untemplated=True,
+    excluded_handlers=["/health", "/metrics"]
+).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 router = APIRouter(prefix="/api/v1")
 
@@ -60,6 +72,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(LoggingMiddleware)
 
 
 @app.exception_handler(ValueError)
