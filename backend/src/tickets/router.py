@@ -4,21 +4,21 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, Query, status
 
-from ...iam.dependencies import CurrentUserDep, get_current_user
-from ...shared.dependencies import PageParamsDep
-from ...shared.domain.exceptions import NotFoundError
-from ...shared.schemas import Page
-from ..dependencies import (
+from ..iam.dependencies import CurrentUserDep, get_current_user
+from ..shared.dependencies import PageParamsDep
+from ..shared.domain.exceptions import NotFoundError
+from ..shared.schemas import Page
+from .dependencies import (
     CommentServiceDep,
     ReactionServiceDep,
     TicketFiltersDep,
     TicketRepoDep,
     TicketServiceDep,
 )
-from ..domain.vo import ReactionType
-from ..infra.ai import predict_ticket_fields
-from ..mappers import map_ticket_to_preview, map_ticket_to_response
-from ..schemas import (
+from .domain.vo import ReactionType
+from .infra.ai import predict_ticket_fields
+from .mappers import map_ticket_to_preview, map_ticket_to_response
+from .schemas import (
     CommentCreate,
     CommentEdit,
     CommentResponse,

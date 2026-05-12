@@ -12,15 +12,16 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from src.core.logging import configure_logging
 from src.core.redis import redis_client
 from src.core.settings import settings
-from src.crm.routers import router as counterparty_router
+from src.crm.router import router as counterparty_router
 from src.iam.routers import router as iam_router
 from src.media.router import router as media_router
-from src.products.routers import router as product_router
+from src.products.router import router as product_router
+from src.projects.router import router as project_router
 from src.proofreading.router import router as proofreading_router
 from src.shared.domain.exceptions import AppError
 from src.shared.infra.middlewares import LoggingMiddleware
 from src.shared.utils.cli import run_cli_command
-from src.tickets.routers import router as tickets_router
+from src.tickets.router import router as tickets_router
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,7 @@ router.include_router(media_router)
 router.include_router(tickets_router)
 router.include_router(proofreading_router)
 router.include_router(product_router)
+router.include_router(project_router)
 
 app.include_router(router)
 

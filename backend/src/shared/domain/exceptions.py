@@ -34,6 +34,12 @@ class InvariantViolationError(AppError):
     public_message = "Нарушены условия существования объекта"
 
 
+class InvalidStateError(AppError):
+    status_code = status.HTTP_409_CONFLICT
+    error_code = "INVALID_STATE"
+    public_message = "Невалидное состояние объекта"
+
+
 class AlreadyExistsError(AppError):
     status_code = status.HTTP_409_CONFLICT
     error_code = "ALREADY_EXISTS"

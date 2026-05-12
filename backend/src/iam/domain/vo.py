@@ -18,7 +18,10 @@ class UserRole(StrEnum):
     SUPPORT_AGENT = "support_agent"  # сотрудник поддержки (1 линия)
     SUPPORT_MANAGER = "support_manager"  # старший сотрудник поддержки (team lead)
 
-    # Работа с договорами и клиентами
+    # Команда разработки
+    DEVELOPER = "developer"
+
+    # Бизнес роли
     ACCOUNT_MANAGER = "account_manager"
     FINANCE = "finance"
 

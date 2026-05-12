@@ -32,12 +32,12 @@ def mock_session():
 
 
 @pytest.fixture
-def mock_auth_service(mock_session, mock_user_repo, mock_invitation_repo, mock_token_blacklist):
+def mock_auth_service(mock_session, fake_user_repo, fake_invitation_repo, fake_token_blacklist):
     return AuthService(
         session=mock_session,
-        user_repo=mock_user_repo,
-        invitation_repo=mock_invitation_repo,
-        blacklist=mock_token_blacklist,
+        user_repo=fake_user_repo,
+        invitation_repo=fake_invitation_repo,
+        blacklist=fake_token_blacklist,
     )
 
 
@@ -74,10 +74,10 @@ def mock_mail_sender():
 
 
 @pytest.fixture
-def mock_invitation_service(mock_session, mock_invitation_repo, mock_mail_sender):
+def mock_invitation_service(mock_session, fake_invitation_repo, mock_mail_sender):
     return InvitationService(
         session=mock_session,
-        repository=mock_invitation_repo,
+        repository=fake_invitation_repo,
         mail_sender=mock_mail_sender,
     )
 
@@ -99,7 +99,7 @@ def make_customer():
         email=fake.email(),
         password_hash=generate_password_hash(),
         username=fake.user_name(),
-        full_name=fake.name(),
+        full_name="Тестов Тест Тестович",
         counterparty_id=uuid4(),
         user_role=UserRole.CUSTOMER_ADMIN,
     )
@@ -170,19 +170,19 @@ class TestAuthServiceRegister:
     async def test_register_success_customer(
             self,
             mock_auth_service,
-            mock_invitation_repo,
-            mock_user_repo,
+            fake_invitation_repo,
+            fake_user_repo,
             mock_invitation_for_customer,
             sample_form_data,
     ):
         # 1. Сохранения приглашения
-        invitation = await mock_invitation_repo.create(mock_invitation_for_customer)
+        invitation = await fake_invitation_repo.create(mock_invitation_for_customer)
 
         # 2. Регистрация по созданному приглашению
         await mock_auth_service.register(invitation.token, sample_form_data)
 
         # 3. Поиск зарегистрированного пользователя по email
-        existing_user = await mock_user_repo.get_by_email(invitation.email)
+        existing_user = await fake_user_repo.get_by_email(invitation.email)
 
         assert existing_user is not None
         assert existing_user.email == invitation.email
@@ -196,13 +196,13 @@ class TestAuthServiceRegister:
     async def test_register_raises_invitation_expired(
             self,
             mock_auth_service,
-            mock_invitation_repo,
+            fake_invitation_repo,
             mock_invitation_for_customer,
             sample_form_data,
     ):
 
         # 1. Сохранения приглашения
-        invitation = await mock_invitation_repo.create(mock_invitation_for_customer)
+        invitation = await fake_invitation_repo.create(mock_invitation_for_customer)
 
         # 2. Прокрутка времени на 20 дней вперёд, чтобы приглашение истекло
         with (
@@ -215,8 +215,8 @@ class TestAuthServiceRegister:
     async def test_register_user_already_exists(
             self,
             mock_auth_service,
-            mock_invitation_repo,
-            mock_user_repo,
+            fake_invitation_repo,
+            fake_user_repo,
             mock_invitation_for_customer,
             sample_form_data,
             sample_counterparty_id,
@@ -229,10 +229,10 @@ class TestAuthServiceRegister:
             password_hash=hash_password(password),
             counterparty_id=sample_counterparty_id,
         )
-        await mock_user_repo.create(user)
+        await fake_user_repo.create(user)
 
         # 2. Создание и сохранение приглашения (чтобы исключить ошибки с приглашением)
-        invitation = await mock_invitation_repo.create(mock_invitation_for_customer)
+        invitation = await fake_invitation_repo.create(mock_invitation_for_customer)
 
         # 2. Попытка регистрации уже существующего пользователя
         with pytest.raises(AlreadyExistsError):
@@ -247,7 +247,7 @@ class TestAuthServiceAuthenticate:
             self,
             sample_counterparty_id,
             sample_password,
-            mock_user_repo,
+            fake_user_repo,
             mock_auth_service,
     ):
 
@@ -257,7 +257,7 @@ class TestAuthServiceAuthenticate:
             password_hash=hash_password(sample_password),
             counterparty_id=sample_counterparty_id,
         )
-        await mock_user_repo.create(user)
+        await fake_user_repo.create(user)
 
         # 2. Аутентификация пользователя
         tokens = await mock_auth_service.authenticate(user.email, sample_password)
@@ -269,7 +269,7 @@ class TestAuthServiceAuthenticate:
             self,
             sample_password,
             sample_counterparty_id,
-            mock_user_repo,
+            fake_user_repo,
             mock_auth_service,
     ):
         # Сохранение пользователя на прямую в БД
@@ -278,7 +278,7 @@ class TestAuthServiceAuthenticate:
             password_hash=hash_password(sample_password),
             counterparty_id=sample_counterparty_id,
         )
-        await mock_user_repo.create(user)
+        await fake_user_repo.create(user)
 
         with pytest.raises(UnauthorizedError, match="Invalid password or user is not active"):
             await mock_auth_service.authenticate(user.email, "wrong_password")
@@ -291,7 +291,7 @@ class TestInvitationServiceSendInvitation:
 
     @pytest.mark.asyncio
     async def test_send_invitation_support_new(
-            self, mock_invitation_service, mock_invitation_repo, mock_session, mock_mail_sender
+            self, mock_invitation_service, fake_invitation_repo, mock_session, mock_mail_sender
     ):
         # 1. Создание и отправка приглашения
         invited_by = uuid4()
@@ -303,7 +303,7 @@ class TestInvitationServiceSendInvitation:
         )
 
         # 2. Проверка успешного создания и записи приглашения
-        created_invitation = await mock_invitation_repo.read(invitation.id)
+        created_invitation = await fake_invitation_repo.read(invitation.id)
 
         mock_session.commit.assert_awaited_once()
         assert created_invitation is not None
@@ -323,7 +323,7 @@ class TestInvitationServiceSendInvitation:
 
     @pytest.mark.asyncio
     async def test_send_invitation_customer_new(
-            self, mock_invitation_service, mock_invitation_repo, mock_session, mock_mail_sender
+            self, mock_invitation_service, fake_invitation_repo, mock_session, mock_mail_sender
     ):
         # 1. Создание и отправка приглашения
         invited_by = uuid4()
@@ -339,7 +339,7 @@ class TestInvitationServiceSendInvitation:
         )
 
         # 2. Проверка успешного создания и записи приглашения
-        created_invitation = await mock_invitation_repo.read(invitation.id)
+        created_invitation = await fake_invitation_repo.read(invitation.id)
 
         mock_session.commit.assert_awaited_once()
         assert created_invitation is not None
@@ -360,7 +360,7 @@ class TestInvitationServiceSendInvitation:
 
     @pytest.mark.asyncio
     async def test_send_invitation_already_exists(
-            self, mock_invitation_service, mock_invitation_repo, mock_session, mock_mail_sender
+            self, mock_invitation_service, fake_invitation_repo, mock_session, mock_mail_sender
     ):
         # 1. Создание и сохранение приглашения
         invited_by = uuid4()
@@ -370,7 +370,7 @@ class TestInvitationServiceSendInvitation:
         invitation = invite_support(
             invited_by=invited_by, email=email, assigned_role=assigned_role
         )
-        await mock_invitation_repo.create(invitation)
+        await fake_invitation_repo.create(invitation)
 
         # 2. Попытка отправки приглашения
         sent_invitation = await mock_invitation_service.send_invitation(
@@ -409,18 +409,18 @@ class TestInvitationServiceRevokeInvitation:
 
     @pytest.mark.asyncio
     async def test_revoke_invitation_success(
-            self, mock_invitation_service, mock_invitation_repo, mock_session
+            self, mock_invitation_service, fake_invitation_repo, mock_session
     ):
         invitation = invite_support(
             invited_by=uuid4(), email=fake.email(), assigned_role=UserRole.SUPPORT_AGENT
         )
-        await mock_invitation_repo.create(invitation)
+        await fake_invitation_repo.create(invitation)
 
         await mock_invitation_service.revoke_invitation(invitation.id)
 
         mock_session.commit.assert_awaited_once()
 
-        existing_invitation = await mock_invitation_repo.read(invitation.id)
+        existing_invitation = await fake_invitation_repo.read(invitation.id)
 
         assert existing_invitation is None
 

@@ -12,14 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ...core.database import Base
 from ...iam.domain.vo import UserRole
-from ..domain.vo import (
-    CommentType,
-    ProjectRole,
-    ProjectStatus,
-    ReactionType,
-    TicketPriority,
-    TicketStatus,
-)
+from ..domain.vo import CommentType, ReactionType, TicketPriority, TicketStatus
 
 
 class TicketOrm(Base):
@@ -36,7 +29,7 @@ class TicketOrm(Base):
     description: Mapped[str] = mapped_column(TEXT)
     status: Mapped[TicketStatus] = mapped_column(Enum(TicketStatus))
     priority: Mapped[TicketPriority] = mapped_column(Enum(TicketPriority))
-    assigned_to: Mapped[UUID | None] = mapped_column(nullable=True)
+    assignee_id: Mapped[UUID | None] = mapped_column(nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     tags: Mapped[list[dict[str, str]]] = mapped_column(JSONB)
 
@@ -128,33 +121,3 @@ class TicketHistoryEntryOrm(Base):
     description: Mapped[str] = mapped_column(TEXT)
 
     ticket: Mapped["TicketOrm"] = relationship(back_populates="history")
-
-
-class MembershipOrm(Base):
-    __tablename__ = "project_memberships"
-
-    project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.id"), unique=False)
-    user_id: Mapped[UUID]
-    project_role: Mapped[ProjectRole] = mapped_column(Enum(ProjectRole))
-    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    added_by: Mapped[UUID]
-    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-
-    project: Mapped["ProjectOrm"] = relationship(back_populates="memberships")
-
-
-class ProjectOrm(Base):
-    __tablename__ = "projects"
-
-    name: Mapped[str]
-    key: Mapped[str] = mapped_column(unique=True)
-    description: Mapped[str | None] = mapped_column(nullable=True)
-    counterparty_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("counterparties.id"), nullable=True
-    )
-    status: Mapped[ProjectStatus] = mapped_column(Enum(ProjectStatus))
-    owner_id: Mapped[UUID]
-    memberships: Mapped[list["MembershipOrm"]] = relationship(
-        back_populates="project", lazy="selectin"
-    )
-    created_by: Mapped[UUID]

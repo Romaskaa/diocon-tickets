@@ -10,8 +10,8 @@ from src.products.services import ProductService
 
 
 @pytest.fixture
-def product_service(mock_session, mock_product_repo):
-    return ProductService(session=mock_session, repository=mock_product_repo)
+def product_service(mock_session, fake_product_repo):
+    return ProductService(session=mock_session, repository=fake_product_repo)
 
 
 class TestCreate:
@@ -60,7 +60,7 @@ class TestCreate:
             valid_create_data,
             created_by_role,
             mock_session,
-            mock_product_repo,
+            fake_product_repo,
     ):
         """
         Успешное создание записи в справочнике программных продуктов
@@ -73,7 +73,7 @@ class TestCreate:
 
         mock_session.commit.assert_awaited_once()
 
-        created_product = await mock_product_repo.read(response.id)
+        created_product = await fake_product_repo.read(response.id)
 
         assert created_product is not None
         assert created_product.id == response.id

@@ -5,14 +5,7 @@ from pydantic import BaseModel, Field, NonNegativeFloat, NonNegativeInt
 
 from ..iam.domain.vo import UserRole
 from ..media.schemas import AttachmentResponse
-from .domain.vo import (
-    CommentType,
-    ProjectRole,
-    ProjectStatus,
-    ReactionType,
-    TicketPriority,
-    TicketStatus,
-)
+from .domain.vo import CommentType, ReactionType, TicketPriority, TicketStatus
 
 
 class CommentResponse(BaseModel):
@@ -123,7 +116,7 @@ class TicketResponse(TicketBase):
     created_by: UUID = Field(..., description="ID пользователя, который создал тикет")
     number: str = Field(..., description="Номер тикета", examples=["ROMASHKA-26-00012456"])
     status: TicketStatus = Field(..., description="Текущий статус")
-    assigned_to: UUID | None = Field(None, description="Кому назначен тикет")
+    assignee_id: UUID | None = Field(None, description="Кому назначен тикет")
     closed_at: datetime | None = Field(None, description="Дата закрытия тикета")
     is_archived: bool = Field(..., description="Заархивирован ли тикет")
 
@@ -226,79 +219,6 @@ class PredictionResponse(BaseModel):
         default_factory=list, min_length=1, max_length=10, description="Предложенные теги"
     )
     confidence: PredictionConfidence = Field(..., description="Уверенность в генерации")
-
-
-class ProjectBase(BaseModel):
-    """Базовая схема проекта"""
-
-    name: str = Field(
-        ..., description="Наименование проекта", examples=["Корпоративный сайт компании"]
-    )
-    key: str = Field(
-        ...,
-        min_length=2,
-        max_length=10,
-        description="Уникальный ключ проекта",
-        examples=["PROJ", "MOB1"],
-    )
-    description: str | None = Field(
-        None, description="Описание проекта (рекомендуется к заполнению)"
-    )
-    counterparty_id: UUID | None = Field(
-        None, description="Контрагент для которого реализуется проект"
-    )
-    owner_id: UUID = Field(..., description="Владелец проекта (обычно support и выше)")
-
-
-class ProjectCreate(ProjectBase):
-    """Схема для создания проекта"""
-
-
-class MembershipResponse(BaseModel):
-    """Участник проекта"""
-
-    user_id: UUID = Field(..., description="ID пользователя в системе")
-    project_role: ProjectRole = Field(..., description="Роль в проекте")
-    added_at: datetime = Field(..., description="Дата добавления в проект")
-    added_by: UUID = Field(..., description="ID пользователя, который добавил участника")
-    is_active: bool = Field(..., description="Активен ли участник п проекте")
-
-
-class ProjectResponse(ProjectBase):
-    """API схема ответа для проекта"""
-
-    id: UUID = Field(..., description="Уникальный ID проекта")
-    created_at: datetime = Field(..., description="Дата создания проекта")
-    updated_at: datetime = Field(..., description="Дата обновления проекта")
-    created_by: UUID = Field(..., description="ID пользователя создавшего проект")
-    status: ProjectStatus = Field(..., description="Статус проекта")
-    memberships: list[MembershipResponse] = Field(
-        default_factory=list, description="Участники проекта"
-    )
-
-
-class KeyCheckResponse(BaseModel):
-    """Результат проверки уникальности ключа"""
-
-    available: bool = Field(..., description="Доступен ли ключ")
-    suggestions: list[str] = Field(
-        default_factory=list, description="Варианты, которые можно попробовать "
-    )
-
-
-class MemberAdd(BaseModel):
-    """Добавление участника проекта"""
-
-    user_id: UUID = Field(..., description="ID пользователя, которого нужно добавить")
-    project_role: ProjectRole = Field(..., description="Назначенная роль в проекте")
-
-
-class MembersAdd(BaseModel):
-    """Добавление множества участников за один запрос"""
-
-    members: list[MemberAdd] = Field(
-        default_factory=list, description="Участники, которых нужно добавить в проект"
-    )
 
 
 class CommentCreate(BaseModel):

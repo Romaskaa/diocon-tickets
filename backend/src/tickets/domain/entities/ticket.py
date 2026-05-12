@@ -1,5 +1,3 @@
-from typing import Self
-
 from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID, uuid4
@@ -8,7 +6,7 @@ from ....iam.domain.exceptions import PermissionDeniedError
 from ....iam.domain.vo import UserRole
 from ....media.domain.entities import Attachment
 from ....shared.domain.entities import AggregateRoot, Entity
-from ....shared.domain.exceptions import InvariantViolationError
+from ....shared.domain.exceptions import InvalidStateError, InvariantViolationError
 from ....shared.utils.time import current_datetime
 from ..constants import (
     ALLOWED_ASSIGN_STATUSES,
@@ -64,7 +62,7 @@ class Ticket(AggregateRoot):
     description: str
     status: TicketStatus
     priority: TicketPriority
-    assigned_to: UUID | None = None
+    assignee_id: UUID | None = None
     closed_at: datetime | None = None
 
     # Дополнительно
@@ -99,7 +97,7 @@ class Ticket(AggregateRoot):
         counterparty_id: UUID | None = None,
         product_id: UUID | None = None,
         tags: list[Tag] | None = None,
-    ) -> Self:
+    ) -> "Ticket":
         """Создание тикета"""
 
         # 1. Создание доменной сущности
@@ -216,15 +214,10 @@ class Ticket(AggregateRoot):
                     description="Поле отредактировано"
                 )
 
-    def archive(self, archived_by: UUID, archived_by_role: UserRole) -> None:
+    def archive(self, archived_by: UUID) -> None:
         """Архивирование тикета"""
 
-        # 1. Проверка прав на архивирование
-        is_creator_or_reporter = archived_by in {self.created_by, self.reporter_id}
-        is_staff = archived_by_role in {UserRole.ADMIN, UserRole.SUPPORT_MANAGER}
-        if not (is_creator_or_reporter or is_staff):
-            raise PermissionDeniedError("Insufficient permissions to archive a ticket")
-
+        # 1. Нельзя архивировать уже архивированный тикет
         if self.is_deleted:
             return
 
@@ -249,41 +242,26 @@ class Ticket(AggregateRoot):
             )
         )
 
-    def assign_to(
-            self,
-            assignee_id: UUID,
-            assignee_role: UserRole,
-            assigned_by: UUID,
-            assigned_by_role: UserRole,
-    ) -> None:
-        """Назначает (или переназначает) тикет на исполнителя (агента поддержки)"""
+    def assign_to(self, assignee_id: UUID, assigned_by: UUID) -> None:
+        """Назначение (или переназначение) тикета на исполнителя (агента поддержки)"""
 
-        # 1. Назначить тикет могут только внутренние сотрудники
-        if assigned_by_role not in {
-            UserRole.SUPPORT_AGENT, UserRole.SUPPORT_MANAGER, UserRole.ADMIN
-        }:
-            raise PermissionDeniedError("Only support team can assign tickets")
-
-        # 2. Назначить тикет можно только на сотрудников поддержки
-        if assignee_role not in {UserRole.SUPPORT_AGENT, UserRole.SUPPORT_MANAGER, UserRole.ADMIN}:
-            raise PermissionDeniedError("Tickets can only be assigned to support team")
-
-        # 3. Для назначения тикета должен быть определённый статус
+        # 1. Для назначения тикета должен быть определённый статус
         if self.status not in ALLOWED_ASSIGN_STATUSES:
-            raise PermissionDeniedError(
+            raise InvalidStateError(
                 f"Cannot assign ticket in status '{self.status.value}'. "
                 f"Allowed statuses: {', '.join(status for status in ALLOWED_ASSIGN_STATUSES)}"
             )
 
-        # 4. Если тикет переназначается на самого себя - то без записи в историю
-        if assignee_id == self.assigned_to:
+        # 2. Если тикет переназначается на самого себя - то без записи в историю
+        if assignee_id == self.assignee_id:
             return
 
-        # 5. Назначение исполнителя
-        old_assignee = self.assigned_to
-        self.assigned_to = assignee_id
+        # 3. Назначение исполнителя
+        old_assignee = self.assignee_id
+        self.assignee_id = assignee_id
+        self.updated_at = current_datetime()
 
-        # 6. Запись изменений в историю
+        # 4. Запись изменений в историю
         self.write_history(
             actor_id=assigned_by,
             action="assigned",
@@ -301,63 +279,24 @@ class Ticket(AggregateRoot):
             )
         )
 
-    def _can_change_to_status(self, new_status: TicketStatus, role: UserRole) -> bool:
-        """Проверка прав на конкретный переход статуса"""
-
-        # 1. Системный администратор и менеджер могут всё
-        if role in {UserRole.ADMIN, UserRole.SUPPORT_MANAGER}:
-            return True
-
-        # 2. Переходя для агента поддержки
-        if role == UserRole.SUPPORT_AGENT:
-            if self.status == TicketStatus.PENDING_APPROVAL:
-                return False  # Агент не может согласовывать
-            return new_status in {
-                TicketStatus.OPEN,
-                TicketStatus.IN_PROGRESS,
-                TicketStatus.WAITING,
-                TicketStatus.RESOLVED,
-                TicketStatus.CLOSED,
-            }
-
-        # 3. Администратор клиента может согласовывать свои тикеты
-        if role == UserRole.CUSTOMER_ADMIN:
-            if self.status == TicketStatus.PENDING_APPROVAL:
-                return new_status in {TicketStatus.OPEN, TicketStatus.REJECTED}
-            return new_status == TicketStatus.REOPENED
-
-        # 4. Клиенты могут только переоткрывать закрытые тикеты
-        if role == UserRole.CUSTOMER:
-            return new_status == TicketStatus.REOPENED and self.status == TicketStatus.CLOSED
-
-        return False
-
-    def change_status(
-            self, new_status: TicketStatus, changed_by: UUID, changed_by_role: UserRole
-    ) -> None:
-        """Изменение статуса"""
+    def change_status(self, new_status: TicketStatus, changed_by: UUID) -> None:
+        """Изменение статуса тикета"""
 
         # 1. Проверка возможности перехода к новому статусу
         if new_status not in ALLOWED_TRANSITIONS.get(self.status, []):
-            raise PermissionDeniedError(
+            raise InvalidStateError(
                 f"Not allowed status transition: from '{self.status}' to '{new_status}'"
             )
 
-        # 2. Проверка прав пользователя на данный переход
-        if not self._can_change_to_status(new_status, changed_by_role):
-            raise PermissionDeniedError(
-                f"Role '{changed_by_role}' is not allowed to change status to '{new_status}'"
-            )
-
-        # 3. Установка нового статуса
+        # 2. Установка нового статуса
         old_status = self.status
         self.status = new_status
 
-        # 4. Если тикет закрыт, то устанавливается время закрытия
+        # 3. Если тикет закрыт, то устанавливается время закрытия
         if new_status == TicketStatus.CLOSED:
             self.closed_at = current_datetime()
 
-        # 5. Запись изменений в историю
+        # 4. Запись изменений в историю
         self.write_history(
             actor_id=changed_by,
             action="status_changed",

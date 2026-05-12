@@ -6,12 +6,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...crm.domain.repo import CounterpartyRepository
 from ...iam.domain.exceptions import PermissionDeniedError
 from ...iam.domain.repos import UserRepository
-from ...iam.domain.vo import UserRole
+from ...iam.schemas import CurrentUser
+from ...projects.domain.repos import ProjectRepository
+from ...projects.domain.services import ProjectAccessService
 from ...shared.domain.events import EventPublisher
 from ...shared.domain.exceptions import NotFoundError
 from ..domain.entities import Ticket
-from ..domain.repos import ProjectRepository, TicketRepository
-from ..domain.services import ProjectAccessService
+from ..domain.repos import TicketRepository
+from ..domain.services import (
+    can_archive_ticket,
+    can_assign_to,
+    can_change_status,
+    can_create_ticket,
+)
 from ..domain.vo import ProjectKey, Tag, TicketNumber, TicketStatus
 from ..mappers import map_ticket_to_response
 from ..schemas import TicketCreate, TicketEdit, TicketResponse
@@ -19,7 +26,9 @@ from ..schemas import TicketCreate, TicketEdit, TicketResponse
 
 @dataclass
 class TicketCreationContext:
-    """Контекст для создания тикета"""
+    """
+    Необходимый контекст для создания тикета
+    """
 
     project_id: UUID | None = None
     project_key: ProjectKey | None = None
@@ -33,6 +42,7 @@ class TicketService:
             session: AsyncSession,
             ticket_repo: TicketRepository,
             project_repo: ProjectRepository,
+            project_access_service: ProjectAccessService,
             user_repo: UserRepository,
             counterparty_repo: CounterpartyRepository,
             event_publisher: EventPublisher,
@@ -42,7 +52,7 @@ class TicketService:
         self.project_repo = project_repo
         self.user_repo = user_repo
         self.counterparty_repo = counterparty_repo
-        self.project_access_service = ProjectAccessService(project_repo)
+        self.project_access_service = project_access_service
         self.event_publisher = event_publisher
 
     async def _determine_creation_context(self, data: TicketCreate) -> TicketCreationContext:
@@ -90,25 +100,32 @@ class TicketService:
             counterparty_name=None,
         )
 
-    async def create(
-            self, data: TicketCreate, created_by: UUID, created_by_role: UserRole
-    ) -> TicketResponse:
+    async def create(self, data: TicketCreate, current_user: CurrentUser) -> TicketResponse:
         """Создание тикета"""
 
         # 1. Определение контекста создания тикета
         context = await self._determine_creation_context(data)
 
-        # 2. Проверка прав доступа
-        if context.project_id is not None:
-            can_create = await self.project_access_service.can_create_ticket(
-                project_id=context.project_id, user_id=created_by, user_role=created_by_role
-            )
-            if not can_create:
-                raise PermissionDeniedError(
-                    "You do not have permissions to create tickets in this project"
-                )
+        # 2. Проверка прав на создание проекта
+        permission = can_create_ticket(
+            user_role=current_user.role,
+            user_counterparty_id=current_user.counterparty_id,
+            counterparty_id=context.counterparty_id,
+        )
+        if not permission.allowed:
+            raise PermissionDeniedError(permission.reason)
 
-        # 3. Генерация уникального номера
+        # 3. Проверка прав на создание тикета внутри проекта
+        if context.project_id is not None:
+            permission = await self.project_access_service.can_create_ticket(
+                project_id=context.project_id,
+                user_id=current_user.user_id,
+                user_role=current_user.role,
+            )
+            if not permission.allowed:
+                raise PermissionDeniedError(permission.reason)
+
+        # 4. Генерация уникального номера
         total_tickets = await self.ticket_repo.get_total(
             project_id=data.project_id, counterparty_id=data.counterparty_id
         )
@@ -118,11 +135,11 @@ class TicketService:
             counterparty_name=context.counterparty_name,
         )
 
-        # 4. Создание и сохранение доменной сущности
+        # 5. Создание и сохранение доменной сущности
         ticket = Ticket.create(
             ticket_number=ticket_number,
-            created_by=created_by,
-            created_by_role=created_by_role,
+            created_by=current_user.user_id,
+            created_by_role=current_user.role,
             reporter_id=data.reporter_id,
             title=data.title,
             description=data.description,
@@ -135,7 +152,7 @@ class TicketService:
         await self.ticket_repo.create(ticket)
         await self.session.commit()
 
-        # 5. Публикация доменных событий
+        # 6. Публикация доменных событий
         for event in ticket.collect_events():
             await self.event_publisher.publish(event)
 
@@ -167,9 +184,7 @@ class TicketService:
 
         return map_ticket_to_response(ticket)
 
-    async def archive(
-            self, ticket_id: UUID, archived_by: UUID, archived_by_role: UserRole
-    ) -> TicketResponse:
+    async def archive(self, ticket_id: UUID, current_user: CurrentUser) -> TicketResponse:
         """Архивация тикета"""
 
         # 1. Получение тикета
@@ -177,19 +192,26 @@ class TicketService:
         if ticket is None:
             raise NotFoundError(f"Ticket with ID {ticket_id} not found")
 
-        # 2. Архивация тикета и обновление сущности
-        ticket.archive(archived_by=archived_by, archived_by_role=archived_by_role)
+        # 2. проверка прав на архивацию тикета
+        permission = can_archive_ticket(
+            ticket=ticket, user_id=current_user.user_id, user_role=current_user.role
+        )
+        if not permission.allowed:
+            raise PermissionDeniedError(permission.reason)
+
+        # 3. Архивация тикета и обновление сущности
+        ticket.archive(archived_by=current_user.user_id)
         await self.ticket_repo.upsert(ticket)
         await self.session.commit()
 
-        # 3. Публикация доменных событий
+        # 4. Публикация доменных событий
         for event in ticket.collect_events():
             await self.event_publisher.publish(event)
 
         return map_ticket_to_response(ticket)
 
     async def assign_to(
-            self, ticket_id: UUID, assignee_id: UUID, assigned_by: UUID, assigned_by_role: UserRole
+            self, ticket_id: UUID, assignee_id: UUID, current_user: CurrentUser
     ) -> TicketResponse:
         """Назначение тикета на исполнителя"""
 
@@ -198,43 +220,46 @@ class TicketService:
         if ticket is None:
             raise NotFoundError(f"Ticket with ID {ticket_id} not found")
 
-        # 2. Проверка прав в проекте, если тикет принадлежит проекту
-        if ticket.project_id is not None:
-            can_assign = await self.project_access_service.can_assign_ticket(
-                project_id=ticket.project_id,
-                user_id=assigned_by,
-                user_role=assigned_by_role
-            )
-            if not can_assign:
-                raise PermissionDeniedError("No permission to assign tickets in this project")
-
-        # 3. Загрузка пользователя на которого назначается тикет
+        # 2. Загрузка пользователя на которого назначается тикет
         assignee = await self.user_repo.read(assignee_id)
         if assignee is None:
             raise NotFoundError(f"User with ID {assignee_id} not found")
 
-        # 4. Назначение исполнителя и обновление сущности
-        ticket.assign_to(
+        # 3. Глобальная проверка прав на назначение исполнителя
+        permission = can_assign_to(
+            ticket=ticket,
             assignee_id=assignee_id,
             assignee_role=assignee.role,
-            assigned_by=assigned_by,
-            assigned_by_role=assigned_by_role,
+            user_id=current_user.user_id,
+            user_role=current_user.role,
         )
+        if not permission.allowed:
+            raise PermissionDeniedError(permission.reason)
+
+        # 4. Если тикет принадлежит проекту, то проверка прав в проекте
+        if ticket.project_id is not None:
+            permission = await self.project_access_service.can_assign_ticket(
+                project_id=ticket.project_id,
+                assignee_id=assignee_id,
+                user_id=current_user.user_id,
+                user_role=current_user.role,
+            )
+            if not permission.allowed:
+                raise PermissionDeniedError(permission.reason)
+
+        # 5. Назначение исполнителя и обновление сущности
+        ticket.assign_to(assignee_id=assignee_id, assigned_by=current_user.user_id)
         await self.ticket_repo.upsert(ticket)
         await self.session.commit()
 
-        # 5. Публикация доменных событий
+        # 6. Публикация доменных событий
         for event in ticket.collect_events():
             await self.event_publisher.publish(event)
 
         return map_ticket_to_response(ticket)
 
     async def change_status(
-            self,
-            ticket_id: UUID,
-            new_status: TicketStatus,
-            changed_by: UUID,
-            changed_by_role: UserRole
+            self, ticket_id: UUID, new_status: TicketStatus, current_user: CurrentUser
     ) -> TicketResponse:
         """Изменение статуса тикета"""
 
@@ -243,22 +268,36 @@ class TicketService:
         if ticket is None:
             raise NotFoundError(f"Ticket with ID {ticket_id} not found")
 
-        # 2. Если тикет принадлежит проекту, то проверка внутри-проектных прав
-        if ticket.project_id is not None:
-            can_change = await self.project_access_service.can_change_status(
-                project_id=ticket.project_id,
-                user_id=changed_by,
-                user_role=changed_by_role,
-            )
-            if not can_change:
-                raise PermissionDeniedError("No permission to change status in this project")
+        # 2. Проверка прав на изменение статуса
+        permission = can_change_status(
+            ticket=ticket,
+            new_status=new_status,
+            user_id=current_user.user_id,
+            user_role=current_user.role,
+            user_counterparty_id=current_user.counterparty_id,
+        )
+        if not permission.allowed:
+            raise PermissionDeniedError(permission.reason)
 
-        # 3. Изменение статуса и обновление доменной сущности
-        ticket.change_status(new_status, changed_by, changed_by_role)
+        # 3. Внутри-проектная проверка прав
+        if ticket.project_id is not None:
+            permission = await self.project_access_service.can_change_ticket_status(
+                project_id=ticket.project_id,
+                ticket=ticket,
+                new_status=new_status,
+                user_id=current_user.user_id,
+                user_role=current_user.role,
+                user_counterparty_id=current_user.counterparty_id,
+            )
+            if not permission.allowed:
+                raise PermissionDeniedError(permission.reason)
+
+        # 4. Изменение статуса и обновление доменной сущности
+        ticket.change_status(new_status=new_status, changed_by=current_user.user_id)
         await self.ticket_repo.upsert(ticket)
         await self.session.commit()
 
-        # 4. Публикация доменных событий
+        # 5. Публикация доменных событий
         for event in ticket.collect_events():
             await self.event_publisher.publish(event)
 

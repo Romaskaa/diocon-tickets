@@ -4,7 +4,8 @@ import pytest
 
 from src.iam.domain.exceptions import PermissionDeniedError
 from src.iam.domain.vo import UserRole
-from src.shared.domain.exceptions import InvariantViolationError
+from src.shared.domain.exceptions import InvalidStateError, InvariantViolationError
+from src.tickets.domain.constants import ALLOWED_TRANSITIONS
 from src.tickets.domain.entities import Ticket
 from src.tickets.domain.vo import Tag, TicketNumber, TicketPriority, TicketStatus
 
@@ -52,14 +53,14 @@ def counterparty_id():
 
 
 @pytest.fixture
-def sample_ticket_number():
+def ticket_number():
     return TicketNumber(value="WEB-26-00000145")
 
 
 @pytest.fixture
-def ticket_in_new(reporter_id, support_agent_id, sample_ticket_number):
+def ticket_in_new(reporter_id, support_agent_id, ticket_number):
     return Ticket.create(
-        ticket_number=sample_ticket_number,
+        ticket_number=ticket_number,
         reporter_id=reporter_id,
         created_by=support_agent_id,
         created_by_role=UserRole.SUPPORT_AGENT,
@@ -71,9 +72,9 @@ def ticket_in_new(reporter_id, support_agent_id, sample_ticket_number):
 
 
 @pytest.fixture
-def ticket_in_pending_approval(reporter_id, sample_ticket_number):
+def ticket_in_pending_approval(reporter_id, ticket_number):
     return Ticket.create(
-        ticket_number=sample_ticket_number,
+        ticket_number=ticket_number,
         reporter_id=reporter_id,
         created_by=reporter_id,
         created_by_role=UserRole.CUSTOMER,
@@ -85,9 +86,9 @@ def ticket_in_pending_approval(reporter_id, sample_ticket_number):
 
 
 @pytest.fixture
-def ticket_in_open(reporter_id, support_agent_id, sample_ticket_number):
+def ticket_in_open(reporter_id, support_agent_id, ticket_number):
     ticket = Ticket.create(
-        ticket_number=sample_ticket_number,
+        ticket_number=ticket_number,
         reporter_id=reporter_id,
         created_by=support_agent_id,
         created_by_role=UserRole.SUPPORT_AGENT,
@@ -101,9 +102,9 @@ def ticket_in_open(reporter_id, support_agent_id, sample_ticket_number):
 
 
 @pytest.fixture
-def ticket_in_progress(reporter_id, support_agent_id, sample_ticket_number):
+def ticket_in_progress(reporter_id, support_agent_id, ticket_number):
     ticket = Ticket.create(
-        ticket_number=sample_ticket_number,
+        ticket_number=ticket_number,
         reporter_id=reporter_id,
         created_by=support_agent_id,
         created_by_role=UserRole.SUPPORT_AGENT,
@@ -119,10 +120,10 @@ def ticket_in_progress(reporter_id, support_agent_id, sample_ticket_number):
 # ====================== Тест кейсы ======================
 
 
-def test_empty_title_raises_error(reporter_id, created_by_id, sample_ticket_number):
+def test_empty_title_raises_error(reporter_id, created_by_id, ticket_number):
     with pytest.raises(ValueError, match="Title cannot be empty"):
         Ticket.create(
-            ticket_number=sample_ticket_number,
+            ticket_number=ticket_number,
             reporter_id=reporter_id,
             created_by=created_by_id,
             created_by_role=UserRole.SUPPORT_AGENT,
@@ -135,9 +136,9 @@ class TestCreate:
     Тесты для создания тикета
     """
 
-    def test_create_ticket_minimal_success(self, reporter_id, created_by_id, sample_ticket_number):
+    def test_create_ticket_minimal_success(self, reporter_id, created_by_id, ticket_number):
         ticket = Ticket.create(
-            ticket_number=sample_ticket_number,
+            ticket_number=ticket_number,
             reporter_id=reporter_id,
             created_by=created_by_id,
             created_by_role=UserRole.SUPPORT_AGENT,
@@ -149,16 +150,16 @@ class TestCreate:
         assert ticket.created_by_role == UserRole.SUPPORT_AGENT
         assert ticket.title == "Проблема с авторизацией"
         assert ticket.status == TicketStatus.NEW
-        assert ticket.number == sample_ticket_number
+        assert ticket.number == ticket_number
         assert len(ticket.history) == 1
         assert ticket.history[0].action == "ticket_created"
 
     def test_create_customer_ticket_requires_counterparty(
-        self, reporter_id, created_by_id, sample_ticket_number
+        self, reporter_id, created_by_id, ticket_number
     ):
         with pytest.raises(InvariantViolationError) as exc:
             Ticket.create(
-                ticket_number=sample_ticket_number,
+                ticket_number=ticket_number,
                 reporter_id=reporter_id,
                 created_by=created_by_id,
                 created_by_role=UserRole.CUSTOMER,
@@ -169,10 +170,10 @@ class TestCreate:
         assert "must be linked to a counterparty" in str(exc.value).lower()
 
     def test_create_ticket_with_project_and_counterparty(
-        reporter_id, created_by_id, sample_ticket_number, project_id, counterparty_id
+        reporter_id, created_by_id, ticket_number, project_id, counterparty_id
     ):
         ticket = Ticket.create(
-            ticket_number=sample_ticket_number,
+            ticket_number=ticket_number,
             reporter_id=reporter_id,
             created_by=created_by_id,
             created_by_role=UserRole.SUPPORT_AGENT,
@@ -190,129 +191,85 @@ class TestChangeStatus:
     Тестирование изменение статуса тикета
     """
 
-    def test_support_manager_can_do_any_transition(self, ticket_in_new):
-        ticket = ticket_in_new
+    @pytest.fixture
+    def ticket_factory(self):
+        """
+        Фабрика для создания тикета с заданным статусом
+        """
 
-        allowed_transitions = [
-            (TicketStatus.NEW, TicketStatus.PENDING_APPROVAL),
-            (TicketStatus.NEW, TicketStatus.OPEN),
-            (TicketStatus.PENDING_APPROVAL, TicketStatus.OPEN),
-            (TicketStatus.OPEN, TicketStatus.IN_PROGRESS),
-            (TicketStatus.IN_PROGRESS, TicketStatus.WAITING),
-            (TicketStatus.IN_PROGRESS, TicketStatus.RESOLVED),
-            (TicketStatus.RESOLVED, TicketStatus.CLOSED),
-            (TicketStatus.CLOSED, TicketStatus.REOPENED),
+        def create(status: TicketStatus) -> Ticket:
+            return Ticket(
+                id=uuid.uuid4(),
+                created_by=uuid.uuid4(),
+                created_by_role=UserRole.SUPPORT_AGENT,
+                reporter_id=uuid.uuid4(),
+                number=TicketNumber("TEST-26-00000001"),
+                title="Transition test",
+                description="",
+                status=status,
+                priority=TicketPriority.MEDIUM,
+                tags=[],
+                attachments=[],
+                history=[],
+            )
+
+        return create
+
+    @pytest.mark.parametrize(
+        ("from_status", "to_status"), [
+            (source, destination)
+            for source, targets in ALLOWED_TRANSITIONS.items()
+            for destination in targets
         ]
+    )
+    def test_valid_transitions(self, ticket_factory, from_status, to_status):
+        """
+        Тестирование успешных переходов в разрешённые статусы
+        """
 
-        for from_status, to_status in allowed_transitions:
-            ticket.status = from_status
+        ticket = ticket_factory(from_status)
 
-            ticket.change_status(
-                new_status=to_status,
-                changed_by=uuid.uuid4(),
-                changed_by_role=UserRole.SUPPORT_MANAGER,
-            )
-            assert ticket.status == to_status
+        changed_by = uuid.uuid4()
+        ticket.change_status(to_status, changed_by=changed_by)
 
-    def test_customer_admin_can_approve_or_reject(self, ticket_in_pending_approval):
-        ticket = ticket_in_pending_approval
+        assert ticket.status == to_status
+        assert len(ticket.history) == 1
 
-        ticket.change_status(
-            new_status=TicketStatus.OPEN,
-            changed_by=uuid.uuid4(),
-            changed_by_role=UserRole.CUSTOMER_ADMIN,
-        )
-        assert ticket.status == TicketStatus.OPEN
+        entry = ticket.history[0]
 
-    def test_customer_admin_cannot_move_to_in_progress(self, ticket_in_pending_approval):
-        ticket = ticket_in_pending_approval
+        assert entry.action == "status_changed"
+        assert entry.old_value == from_status
+        assert entry.new_value == to_status.value
+        assert entry.actor_id == changed_by
 
-        with pytest.raises(PermissionDeniedError):
-            ticket.change_status(
-                new_status=TicketStatus.IN_PROGRESS,
-                changed_by=uuid.uuid4(),
-                changed_by_role=UserRole.CUSTOMER_ADMIN,
-            )
+        # При закрытии тикета должно устанавливаться поле `closed_at`
+        if to_status == TicketStatus.CLOSED:
+            assert ticket.closed_at is not None
+        else:
+            assert ticket.closed_at is None
 
-    def test_support_agent_cannot_approve(self, ticket_in_pending_approval):
-        ticket = ticket_in_pending_approval
+    @pytest.mark.parametrize(
+        ("from_status", "to_status"), [
+            (source, destination)
+            for source in list(TicketStatus)
+            for destination in list(TicketStatus)
+            if destination not in ALLOWED_TRANSITIONS.get(source, [])
+        ]
+    )
+    def test_invalid_transition_must_raises_error(self, ticket_factory, from_status, to_status):
+        """
+        При невалидном переходе должна выбрасываться ошибка
+        """
 
-        with pytest.raises(PermissionDeniedError):
-            ticket.change_status(
-                new_status=TicketStatus.OPEN,
-                changed_by=uuid.uuid4(),
-                changed_by_role=UserRole.SUPPORT_AGENT,
-            )
+        ticket = ticket_factory(from_status)
+        original_status = ticket.status
 
-    def test_invalid_transition_raises_error(self, ticket_in_new):
-        ticket = ticket_in_new
+        with pytest.raises(InvalidStateError, match="Not allowed status transition"):
+            ticket.change_status(to_status, changed_by=uuid.uuid4())
 
-        with pytest.raises(PermissionDeniedError, match="Not allowed status transition"):
-            ticket.change_status(
-                new_status=TicketStatus.RESOLVED,
-                changed_by=uuid.uuid4(),
-                changed_by_role=UserRole.SUPPORT_AGENT,
-            )
-
-    def test_close_ticket_sets_closed_at(self, ticket_in_new):
-        ticket = ticket_in_new
-        ticket.status = TicketStatus.RESOLVED
-
-        ticket.change_status(
-            new_status=TicketStatus.CLOSED,
-            changed_by=uuid.uuid4(),
-            changed_by_role=UserRole.SUPPORT_MANAGER,
-        )
-
-        assert ticket.status == TicketStatus.CLOSED
-        assert ticket.closed_at is not None
-
-    def test_customer_can_only_reopen_closed_ticket(self, ticket_in_new):
-        ticket = ticket_in_new
-        ticket.status = TicketStatus.CLOSED
-
-        ticket.change_status(
-            new_status=TicketStatus.REOPENED,
-            changed_by=uuid.uuid4(),
-            changed_by_role=UserRole.CUSTOMER,
-        )
-
-        assert ticket.status == TicketStatus.REOPENED
-
-        ticket.status = TicketStatus.CLOSED
-        with pytest.raises(PermissionDeniedError):
-            ticket.change_status(
-                new_status=TicketStatus.IN_PROGRESS,
-                changed_by=uuid.uuid4(),
-                changed_by_role=UserRole.CUSTOMER,
-            )
-
-    def test_support_manager_can_skip_pending_approval(self, ticket_in_new):
-        ticket = ticket_in_new
-
-        ticket.change_status(
-            new_status=TicketStatus.OPEN,
-            changed_by=uuid.uuid4(),
-            changed_by_role=UserRole.SUPPORT_MANAGER,
-        )
-        assert ticket.status == TicketStatus.OPEN
-
-    def test_customer_admin_can_only_approve_from_pending(self, ticket_in_pending_approval):
-        ticket = ticket_in_pending_approval
-
-        ticket.change_status(
-            new_status=TicketStatus.OPEN,
-            changed_by=uuid.uuid4(),
-            changed_by_role=UserRole.CUSTOMER_ADMIN,
-        )
-        assert ticket.status == TicketStatus.OPEN
-
-        with pytest.raises(PermissionDeniedError):
-            ticket.change_status(
-                new_status=TicketStatus.IN_PROGRESS,
-                changed_by=uuid.uuid4(),
-                changed_by_role=UserRole.CUSTOMER_ADMIN,
-            )
+        assert ticket.status == original_status
+        assert len(ticket.history) == 0
+        assert ticket.closed_at is None
 
 
 class TestAssignTo:
@@ -320,155 +277,69 @@ class TestAssignTo:
     Тестирование назначения тикета на исполнителя
     """
 
-    def test_support_agent_can_assign_ticket(self, ticket_in_open):
-        ticket = ticket_in_open
+    def test_assign_free_ticket_success(self, ticket_in_open, support_agent_id):
+        """
+        Успешное назначение исполнителя на свободный тикет
+        """
+
         assignee_id = uuid.uuid4()
-        excepted_history_length = 2
+        ticket_in_open.assign_to(assignee_id=assignee_id, assigned_by=support_agent_id)
 
-        ticket.assign_to(
-            assignee_id=assignee_id,
-            assignee_role=UserRole.SUPPORT_AGENT,
-            assigned_by=uuid.uuid4(),
-            assigned_by_role=UserRole.SUPPORT_AGENT,
-        )
+        assert ticket_in_open.assignee_id == assignee_id
+        assert ticket_in_open.history[-1].action == "assigned"
+        assert ticket_in_open.updated_at > ticket_in_open.created_at
 
-        assert ticket.assigned_to == assignee_id
-        assert len(ticket.history) == excepted_history_length
-        assert ticket.history[-1].action == "assigned"
+    def test_reassign_ticket_success(self, ticket_in_open, support_agent_id):
+        """
+        Успешное переназначение исполнителя тикета
+        """
 
-    def test_support_manager_can_assign_ticket(self, ticket_in_open):
-        ticket = ticket_in_open
+        first_support_agent_id = uuid.uuid4()
+        ticket_in_open.assign_to(assignee_id=first_support_agent_id, assigned_by=support_agent_id)
+        old_updated_at = ticket_in_open.updated_at
+
+        second_agent_id = uuid.uuid4()
+        ticket_in_open.assign_to(assignee_id=second_agent_id, assigned_by=first_support_agent_id)
+
+        assert ticket_in_open.assignee_id == second_agent_id
+        assert ticket_in_open.history[-1].action == "assigned"
+        assert ticket_in_open.updated_at > old_updated_at
+
+    def test_assign_same_user_do_nothing(self, ticket_in_open, support_agent_id):
+        """
+        При назначении того же пользователя не изменяется состояние тикета
+        """
+
         assignee_id = uuid.uuid4()
+        ticket_in_open.assign_to(assignee_id=assignee_id, assigned_by=support_agent_id)
+        old_updated_at = ticket_in_open.updated_at
+        old_ticket_history_length = len(ticket_in_open.history)
 
-        ticket.assign_to(
-            assignee_id=assignee_id,
-            assignee_role=UserRole.SUPPORT_AGENT,
-            assigned_by=uuid.uuid4(),
-            assigned_by_role=UserRole.SUPPORT_MANAGER,
-        )
+        ticket_in_open.assign_to(assignee_id=assignee_id, assigned_by=support_agent_id)
 
-        assert ticket.assigned_to == assignee_id
+        assert len(ticket_in_open.history) == old_ticket_history_length
+        assert ticket_in_open.assignee_id == assignee_id
+        assert old_updated_at == ticket_in_open.updated_at
 
-    def test_admin_can_assign_ticket(self, ticket_in_open):
+    @pytest.mark.parametrize(
+        "new_status", [
+            TicketStatus.NEW,
+            TicketStatus.PENDING_APPROVAL,
+            TicketStatus.CLOSED,
+            TicketStatus.REOPENED,
+        ]
+    )
+    def test_cannot_assign_when_status_not_allowed(self, ticket_in_open, new_status):
         """
-        Администратор может назначать тикеты
-        """
-
-        ticket = ticket_in_open
-        assignee_id = uuid.uuid4()
-
-        ticket.assign_to(
-            assignee_id=assignee_id,
-            assignee_role=UserRole.SUPPORT_AGENT,
-            assigned_by=uuid.uuid4(),
-            assigned_by_role=UserRole.ADMIN
-        )
-
-        assert ticket.assigned_to == assignee_id
-
-    def test_customer_cannot_assign_ticket(self, ticket_in_open, customer_id):
-        """
-        Клиент не может назначать тикеты
+        Нельзя назначить исполнителя при невалидном статусе
         """
 
-        ticket = ticket_in_open
+        ticket_in_open.status = new_status
 
-        with pytest.raises(PermissionDeniedError, match="Only support team"):
-            ticket.assign_to(
-                assignee_id=uuid.uuid4(),
-                assignee_role=UserRole.SUPPORT_AGENT,
-                assigned_by=customer_id,
-                assigned_by_role=UserRole.CUSTOMER,
-            )
+        with pytest.raises(InvalidStateError, match="Cannot assign ticket in status"):
+            ticket_in_open.assign_to(assignee_id=uuid.uuid4(), assigned_by=uuid.uuid4())
 
-    def test_cannot_assign_in_invalid_status(self, ticket_in_open):
-        """
-        Нельзя назначать тикет в недопустимом статусе
-        """
-
-        ticket = ticket_in_open
-        ticket.status = TicketStatus.CLOSED
-
-        with pytest.raises(PermissionDeniedError, match="Cannot assign ticket in status"):
-            ticket.assign_to(
-                assignee_id=uuid.uuid4(),
-                assignee_role=UserRole.SUPPORT_AGENT,
-                assigned_by=uuid.uuid4(),
-                assigned_by_role=UserRole.SUPPORT_AGENT,
-            )
-
-    def test_agent_can_assign_to_himself(self, ticket_in_open, support_agent_id):
-        """
-        Агент поддержки может назначить тикет на самого себя
-        """
-
-        ticket = ticket_in_open
-
-        ticket.assign_to(
-            assignee_id=support_agent_id,
-            assignee_role=UserRole.SUPPORT_AGENT,
-            assigned_by=support_agent_id,
-            assigned_by_role=UserRole.SUPPORT_AGENT,
-        )
-
-        assert ticket.assigned_to == support_agent_id
-
-    def test_can_reassign_to_another_agent(self, ticket_in_open):
-        """
-        Можно переназначить тикет на другого агента поддержки
-        """
-
-        ticket = ticket_in_open
-        ticket.assign_to(
-            assignee_id=uuid.uuid4(),
-            assignee_role=UserRole.SUPPORT_AGENT,
-            assigned_by=uuid.uuid4(),
-            assigned_by_role=UserRole.SUPPORT_MANAGER,
-        )
-        excepted_history_length = 3
-
-        new_assignee = uuid.uuid4()
-
-        ticket.assign_to(
-            assignee_id=new_assignee,
-            assignee_role=UserRole.SUPPORT_MANAGER,
-            assigned_by=uuid.uuid4(),
-            assigned_by_role=UserRole.SUPPORT_AGENT,
-        )
-
-        assert ticket.assigned_to == new_assignee
-        assert len(ticket.history) == excepted_history_length
-
-    def test_assigning_to_same_person_does_nothing(self, ticket_in_open, support_agent_id):
-        """
-        Повторное назначение на того же человека не должно создавать новую запись в истории
-        """
-
-        ticket = ticket_in_open
-        ticket.assigned_to = support_agent_id
-        history_len_before = len(ticket.history)
-
-        ticket.assign_to(
-            assignee_id=support_agent_id,
-            assignee_role=UserRole.ADMIN,
-            assigned_by=uuid.uuid4(),
-            assigned_by_role=UserRole.SUPPORT_AGENT,
-        )
-
-        assert len(ticket.history) == history_len_before
-
-    def test_cannot_assigning_to_customer(self, ticket_in_open, customer_id):
-        """
-        Нельзя назначить тикет на клиента
-        """
-
-        with pytest.raises(PermissionDeniedError, match="can only be assigned to support team"):
-            ticket_in_open.assign_to(
-                assignee_id=customer_id,
-                assignee_role=UserRole.CUSTOMER,
-                assigned_by=uuid.uuid4(),
-                assigned_by_role=UserRole.SUPPORT_AGENT,
-            )
+        assert ticket_in_open.assignee_id is None
 
 
 class TestEdit:
@@ -551,11 +422,7 @@ class TestEdit:
         """
 
         # Изменение статуса на 'новый'
-        ticket.change_status(
-            new_status=TicketStatus.OPEN,
-            changed_by=reporter_id,
-            changed_by_role=UserRole.CUSTOMER_ADMIN,
-        )
+        ticket.change_status(new_status=TicketStatus.OPEN, changed_by=reporter_id)
 
         with pytest.raises(
                 InvariantViolationError, match="Cannot edit ticket in not allowed status"
@@ -580,19 +447,11 @@ class TestArchive:
     """
 
     @pytest.fixture
-    def creator_id(self):
-        return uuid.uuid4()
-
-    @pytest.fixture
-    def reporter_id(self):
-        return uuid.uuid4()
-
-    @pytest.fixture
-    def ticket(self, reporter_id, creator_id):
+    def created_ticket(self):
         return Ticket.create(
             ticket_number=TicketNumber("WEB-26-00000005"),
-            reporter_id=reporter_id,
-            created_by=creator_id,
+            reporter_id=uuid.uuid4(),
+            created_by=uuid.uuid4(),
             created_by_role=UserRole.CUSTOMER,
             title="Initial ticket",
             description="Initial description",
@@ -600,72 +459,32 @@ class TestArchive:
             counterparty_id=uuid.uuid4(),
         )
 
-    def test_archive_by_creator_success(self, ticket, creator_id):
+    def test_archive_by_creator_success(self, created_ticket):
         """
-        Успешная архивация тикета автором
+        Успешная архивация активного тикета
         """
 
-        ticket.archive(archived_by=creator_id, archived_by_role=UserRole.SUPPORT_AGENT)
+        created_ticket.archive(archived_by=uuid.uuid4())
 
         excepted_history_length = 2
 
-        assert ticket.is_deleted is True
-        assert ticket.updated_at > ticket.created_at
-        assert len(ticket.history) == excepted_history_length
-        assert ticket.history[-1].action == "ticket_archived"
+        assert created_ticket.is_deleted is True
+        assert len(created_ticket.history) == excepted_history_length
+        assert created_ticket.history[-1].action == "ticket_archived"
 
-    @pytest.mark.parametrize(
-        "user_role", [
-            UserRole.CUSTOMER,
-            UserRole.CUSTOMER_ADMIN,
-            UserRole.SUPPORT_AGENT,
-            UserRole.SUPPORT_MANAGER,
-            UserRole.ADMIN,
-        ]
-    )
-    def test_archive_by_reporter_success(self, ticket, reporter_id, user_role):
+    def test_archive_already_archived_do_nothing(self, created_ticket):
         """
-        Успешная архивация тикета инициатором
+        При архивации уже заархивированного тикета не должно меняться состояние
         """
 
-        ticket.archive(archived_by=reporter_id, archived_by_role=user_role)
+        created_ticket.archive(archived_by=uuid.uuid4())
+        old_updated_at = created_ticket.updated_at
 
-        assert ticket.is_deleted is True
+        # Повторная архивация
+        created_ticket.archive(archived_by=uuid.uuid4())
 
-    @pytest.mark.parametrize("user_role", [UserRole.ADMIN, UserRole.SUPPORT_MANAGER])
-    def test_archive_by_required_staff_success(self, ticket, user_role):
-        """
-        Успешная архивация тикета определёнными сотрудниками
-        """
+        excepted_history_length = 2
 
-        ticket.archive(archived_by=uuid.uuid4(), archived_by_role=user_role)
-
-        assert ticket.is_deleted is True
-
-    @pytest.mark.parametrize(
-        "wrong_role", [UserRole.CUSTOMER, UserRole.CUSTOMER_ADMIN, UserRole.SUPPORT_AGENT]
-    )
-    def test_archive_forbidden_for_wrong_role_and_outsider_id(self, ticket, wrong_role):
-        """
-        Доступ запрещён если неверная роль и
-        """
-
-        with pytest.raises(
-                PermissionDeniedError, match="Insufficient permissions to archive a ticket"
-        ):
-            ticket.archive(archived_by=uuid.uuid4(), archived_by_role=wrong_role)
-
-    def test_archive_already_archived_does_nothing(self, ticket, reporter_id):
-        """
-        При архивации уже архивированного тикета, не должно обновляться состояние
-        """
-
-        ticket.archive(archived_by=reporter_id, archived_by_role=UserRole.SUPPORT_AGENT)
-
-        deleted_at, updated_at = ticket.deleted_at, ticket.updated_at
-
-        ticket.archive(archived_by=reporter_id, archived_by_role=UserRole.SUPPORT_MANAGER)
-
-        assert ticket.is_deleted is True
-        assert ticket.deleted_at == deleted_at
-        assert ticket.updated_at == updated_at
+        assert created_ticket.is_deleted is True
+        assert len(created_ticket.history) == excepted_history_length
+        assert old_updated_at == created_ticket.updated_at

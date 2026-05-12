@@ -45,16 +45,16 @@ def branch_data():
 
 
 @pytest.fixture
-def counterparty_service(mock_session, mock_counterparty_repo):
-    return CounterpartyService(session=mock_session, repository=mock_counterparty_repo)
+def counterparty_service(mock_session, fake_counterparty_repo):
+    return CounterpartyService(session=mock_session, repository=fake_counterparty_repo)
 
 
 # ====================== Тесты для сервисов контрагента ======================
 
 
 @pytest.mark.asyncio
-async def test_create_counterparty_success(legal_entity_data, mock_counterparty_repo):
-    service = CounterpartyService(session=AsyncMock(), repository=mock_counterparty_repo)
+async def test_create_counterparty_success(legal_entity_data, fake_counterparty_repo):
+    service = CounterpartyService(session=AsyncMock(), repository=fake_counterparty_repo)
 
     response = await service.create(legal_entity_data)
 
@@ -63,9 +63,9 @@ async def test_create_counterparty_success(legal_entity_data, mock_counterparty_
 
 @pytest.mark.asyncio
 async def test_add_branch_to_exists_counterparty(
-        legal_entity_data, branch_data, mock_counterparty_repo
+        legal_entity_data, branch_data, fake_counterparty_repo
 ):
-    service = CounterpartyService(session=AsyncMock(), repository=mock_counterparty_repo)
+    service = CounterpartyService(session=AsyncMock(), repository=fake_counterparty_repo)
 
     counterparty = await service.create(legal_entity_data)
     response = await service.add_branch(counterparty.id, branch_data)

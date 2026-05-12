@@ -16,16 +16,16 @@ from src.tickets.services import CommentService
 @pytest.fixture
 def comment_service(
         mock_session,
-        mock_ticket_repo,
-        mock_comment_repo,
-        mock_reaction_repo,
+        fake_ticket_repo,
+        fake_comment_repo,
+        fake_reaction_repo,
         event_publisher,
 ):
     return CommentService(
         session=mock_session,
-        ticket_repo=mock_ticket_repo,
-        comment_repo=mock_comment_repo,
-        reaction_repo=mock_reaction_repo,
+        ticket_repo=fake_ticket_repo,
+        comment_repo=fake_comment_repo,
+        reaction_repo=fake_reaction_repo,
         event_publisher=event_publisher,
     )
 
@@ -60,7 +60,7 @@ def current_customer_user(counterparty_id, customer_id):
 
 
 @pytest.fixture
-async def created_ticket(customer_id, counterparty_id, mock_ticket_repo):
+async def created_ticket(customer_id, counterparty_id, fake_ticket_repo):
     ticket = Ticket.create(
         ticket_number=TicketNumber("TEST-26-00000001"),
         reporter_id=customer_id,
@@ -70,19 +70,19 @@ async def created_ticket(customer_id, counterparty_id, mock_ticket_repo):
         description="Описание",
         counterparty_id=counterparty_id,
     )
-    await mock_ticket_repo.create(ticket)
+    await fake_ticket_repo.create(ticket)
     return ticket
 
 
 @pytest.fixture
-async def created_comment(created_ticket, mock_comment_repo, customer_id):
+async def created_comment(created_ticket, fake_comment_repo, customer_id):
     comment = Comment.create(
         ticket_id=created_ticket.id,
         author_id=customer_id,
         author_role=UserRole.CUSTOMER,
         text="Комментарий клиента"
     )
-    await mock_comment_repo.create(comment)
+    await fake_comment_repo.create(comment)
     return comment
 
 
@@ -95,7 +95,7 @@ class TestAddComment:
     async def test_creates_success(
             self,
             mock_session,
-            mock_comment_repo,
+            fake_comment_repo,
             comment_service,
             current_support_user,
             created_ticket,
@@ -115,7 +115,7 @@ class TestAddComment:
         assert response.ticket_id == created_ticket.id
         assert response.type == CommentType.PUBLIC
 
-        added_comment = await mock_comment_repo.read(response.id)
+        added_comment = await fake_comment_repo.read(response.id)
 
         assert added_comment is not None
         assert added_comment.text == data.text.strip()
@@ -167,7 +167,7 @@ class TestReplyToComment:
             comment_service,
             current_support_user,
             mock_session,
-            mock_comment_repo,
+            fake_comment_repo,
             created_ticket,
             created_comment,
     ):
@@ -185,7 +185,7 @@ class TestReplyToComment:
 
         mock_session.commit.assert_awaited_once()
 
-        parent_comment = await mock_comment_repo.read(response.parent_comment_id)
+        parent_comment = await fake_comment_repo.read(response.parent_comment_id)
 
         assert parent_comment is not None
         assert parent_comment.reply_count == 1
@@ -197,7 +197,7 @@ class TestReplyToComment:
             self,
             comment_service,
             mock_session,
-            mock_ticket_repo,
+            fake_ticket_repo,
             created_comment,
             current_customer_user,
     ):
@@ -214,7 +214,7 @@ class TestReplyToComment:
             title="Какой-то левый тикет",
             description="Описание",
         )
-        await mock_ticket_repo.create(ticket)
+        await fake_ticket_repo.create(ticket)
 
         data = CommentCreate(text="Тестовый комментарий", type=CommentType.PUBLIC)
 
@@ -241,7 +241,7 @@ class TestDeleteComment:
             current_customer_user,
             created_comment,
             mock_session,
-            mock_comment_repo,
+            fake_comment_repo,
     ):
         """
         Успешное удаление комментария
@@ -256,7 +256,7 @@ class TestDeleteComment:
 
         mock_session.commit.assert_awaited_once()
 
-        existing = await mock_comment_repo.read(created_comment.id)
+        existing = await fake_comment_repo.read(created_comment.id)
 
         assert existing.is_deleted is True
 
@@ -267,7 +267,7 @@ class TestDeleteComment:
             current_support_user,
             created_ticket,
             created_comment,
-            mock_comment_repo,
+            fake_comment_repo,
     ):
         """
         Успешное удаление ответа и уменьшение счётчика ответов у родителя
@@ -288,10 +288,10 @@ class TestDeleteComment:
             deleted_by_role=current_support_user.role,
         )
 
-        existing = await mock_comment_repo.read(response.id)
+        existing = await fake_comment_repo.read(response.id)
         assert existing.is_deleted is True
 
-        parent_comment = await mock_comment_repo.read(created_comment.id)
+        parent_comment = await fake_comment_repo.read(created_comment.id)
         assert parent_comment is not None
         assert parent_comment.reply_count == 0
 
@@ -301,7 +301,7 @@ class TestDeleteComment:
             comment_service,
             current_customer_user,
             created_comment,
-            mock_ticket_repo,
+            fake_ticket_repo,
     ):
         """
         Нельзя удалить комментарий не принадлежащий тикету
@@ -316,7 +316,7 @@ class TestDeleteComment:
             title="Какой-то левый тикет",
             description="Описание",
         )
-        await mock_ticket_repo.create(ticket)
+        await fake_ticket_repo.create(ticket)
 
         with pytest.raises(NotFoundError, match="Comment does not belong to this ticket"):
             await comment_service.delete_comment(
@@ -334,7 +334,7 @@ class TestDeleteComment:
             current_support_user,
             created_ticket,
             created_comment,
-            mock_comment_repo,
+            fake_comment_repo,
     ):
         """
         Пропуск уменьшения счётчика, если родитель был удалён
@@ -365,7 +365,7 @@ class TestDeleteComment:
             deleted_by_role=current_support_user.role,
         )
 
-        parent_comment = await mock_comment_repo.read(created_comment.id)
+        parent_comment = await fake_comment_repo.read(created_comment.id)
         assert parent_comment is not None
         assert parent_comment.is_deleted is True
         assert parent_comment.reply_count == 1
@@ -384,7 +384,7 @@ class TestGetComments:
 
     @pytest.fixture
     async def sample_comments(
-            self, created_ticket, mock_comment_repo, mock_reaction_repo, current_support_user
+            self, created_ticket, fake_comment_repo, fake_reaction_repo, current_support_user
     ):
         first_comment = Comment.create(
             ticket_id=created_ticket.id,
@@ -420,7 +420,7 @@ class TestGetComments:
             )
         ]
         for comment in comments:
-            await mock_comment_repo.create(comment)
+            await fake_comment_repo.create(comment)
 
         reaction = Reaction.create(
             comment_id=first_comment.id,
@@ -428,7 +428,7 @@ class TestGetComments:
             author_role=current_support_user.role,
             reaction_type=ReactionType.LIKE,
         )
-        await mock_reaction_repo.create(reaction)
+        await fake_reaction_repo.create(reaction)
 
         return comments
 

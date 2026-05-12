@@ -1,6 +1,6 @@
 import pytest
 
-from src.tickets.domain.vo import ProjectKey
+from src.projects.domain.vo import ProjectKey
 
 
 class TestProjectKey:

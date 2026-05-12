@@ -5,9 +5,9 @@ from ..domain.repo import Repository
 from ..schemas import PageParams
 
 
-async def iterate_batches(
-        repository: Repository[Entity], start_page: int = 1, size: int = 50, **kwargs
-) -> AsyncIterable[list[Entity]]:
+async def iterate_batches[EntityT: Entity](
+        repository: Repository[EntityT], start_page: int = 1, size: int = 50, **kwargs
+) -> AsyncIterable[list[EntityT]]:
     """
     Итератор по коллекции сущностей (реализация паттерна batching)
     """

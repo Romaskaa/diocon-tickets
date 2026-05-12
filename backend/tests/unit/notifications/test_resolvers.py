@@ -25,8 +25,8 @@ def in_app_channel():
 
 
 @pytest.fixture
-def channel_resolver(mock_preference_repo, email_channel, in_app_channel):
-    return ChannelResolver(mock_preference_repo, email_channel, in_app_channel)
+def channel_resolver(fake_preference_repo, email_channel, in_app_channel):
+    return ChannelResolver(fake_preference_repo, email_channel, in_app_channel)
 
 
 class TestChannelResolver:
@@ -54,7 +54,7 @@ class TestChannelResolver:
 
     @pytest.mark.asyncio
     async def test_resolve_with_preference_enabled_channels(
-            self, mock_preference_repo, channel_resolver, email_channel, in_app_channel
+            self, fake_preference_repo, channel_resolver, email_channel, in_app_channel
     ):
         """
         Должны быть доступны только разрешённые каналы уведомлений
@@ -65,7 +65,7 @@ class TestChannelResolver:
 
         preference = UserPreference(user_id=user_id, notification_type=notification_type)
         preference.disable_channel(ChannelType.IN_APP)
-        await mock_preference_repo.create(preference)
+        await fake_preference_repo.create(preference)
 
         channels = await channel_resolver.resolve(user_id, notification_type)
         excepted_channels_length = 1
@@ -76,7 +76,7 @@ class TestChannelResolver:
 
     @pytest.mark.asyncio
     async def test_resolve_all_channels_disabled_returns_empty_list(
-            self, mock_preference_repo, channel_resolver
+            self, fake_preference_repo, channel_resolver
     ):
         """
         Если все каналы отключены пользователем, то нет уведомлений
@@ -88,7 +88,7 @@ class TestChannelResolver:
         preference = UserPreference(user_id=user_id, notification_type=notification_type)
         preference.disable_channel(ChannelType.IN_APP)
         preference.disable_channel(ChannelType.EMAIL)
-        await mock_preference_repo.create(preference)
+        await fake_preference_repo.create(preference)
 
         channels = await channel_resolver.resolve(user_id, notification_type)
 
@@ -96,7 +96,7 @@ class TestChannelResolver:
 
     @pytest.mark.asyncio
     async def test_resolve_when_preference_muted_returns_empty_list(
-            self, channel_resolver, mock_preference_repo
+            self, channel_resolver, fake_preference_repo
     ):
         """
         В настройках каналы заглушены - то пустой список
@@ -107,7 +107,7 @@ class TestChannelResolver:
 
         preference = UserPreference(user_id=user_id, notification_type=notification_type)
         preference.mute(timedelta(hours=1))
-        await mock_preference_repo.create(preference)
+        await fake_preference_repo.create(preference)
 
         channels = await channel_resolver.resolve(user_id, notification_type)
 

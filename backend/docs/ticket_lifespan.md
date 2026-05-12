@@ -28,3 +28,20 @@ graph LR
 | CLOSED           | Agent, Manager           | Тикет закрыт                                  | REOPENED                    |
 | REOPENED         | Client, Manager          | Тикет переоткрыт (проблема вернулась)         | OPEN, IN_PROGRESS           |
 | REJECTED         | Manager                  | Тикет отклонён (неактуален, дубликат и т.д.)  | CLOSED                      |
+
+## Жизненный цикл тикета (бизнес процесс)
+
+```mermaid
+flowchart TD
+    A[Клиент создаёт тикет] --> B[Статус: NEW / PENDING_APPROVAL]
+    B --> C[Customer Admin согласовывает]
+    C --> D[Статус: OPEN]
+    D --> E[Support Manager / Agent назначает SUPPORT_SPECIALIST]
+    E --> F[Исполнитель создаёт подзадачи]
+    F --> G[Исполнитель логирует время TimeEntry]
+    G --> H[Тикет переходит в RESOLVED]
+    H --> I[Support Manager / Finance одобряет TimeEntry]
+    I --> J[Часы списываются с договора]
+    J --> K[Тикет закрывается CLOSED]
+    K --> L[Финансовый отчёт / Выставление счёта]
+```

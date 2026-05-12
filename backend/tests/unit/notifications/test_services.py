@@ -34,13 +34,13 @@ def in_app_channel():
 
 
 @pytest.fixture
-def channel_resolver(mock_preference_repo, email_channel, in_app_channel):
-    return ChannelResolver(mock_preference_repo, email_channel, in_app_channel)
+def channel_resolver(fake_preference_repo, email_channel, in_app_channel):
+    return ChannelResolver(fake_preference_repo, email_channel, in_app_channel)
 
 
 @pytest.fixture
-def notification_service(mock_session, mock_notification_repo, channel_resolver):
-    return NotificationService(mock_session, mock_notification_repo, channel_resolver)
+def notification_service(mock_session, fake_notification_repo, channel_resolver):
+    return NotificationService(mock_session, fake_notification_repo, channel_resolver)
 
 
 @pytest.fixture
@@ -64,7 +64,7 @@ class TestNotificationServiceNotify:
             mock_session,
             notification,
             notification_service,
-            mock_notification_repo,
+            fake_notification_repo,
             email_channel,
             in_app_channel,
     ):
@@ -72,7 +72,7 @@ class TestNotificationServiceNotify:
 
         mock_session.commit.assert_awaited_once()
 
-        created_notification = await mock_notification_repo.read(notification.id)
+        created_notification = await fake_notification_repo.read(notification.id)
 
         assert created_notification is not None
         assert created_notification.title == notification.title
@@ -99,13 +99,13 @@ class TestNotificationServiceMarkAsRead:
 
     @pytest.mark.asyncio
     async def test_mark_as_read_updates_unread_notification(
-            self, notification, mock_session, notification_service, mock_notification_repo
+            self, notification, mock_session, notification_service, fake_notification_repo
     ):
-        await mock_notification_repo.create(notification)
+        await fake_notification_repo.create(notification)
 
         await notification_service.mark_as_read(notification.id, read_by=notification.user_id)
 
-        updated_notification = await mock_notification_repo.read(notification.id)
+        updated_notification = await fake_notification_repo.read(notification.id)
 
         assert updated_notification.read is True
 
@@ -117,7 +117,7 @@ class TestNotificationServiceMarkAsRead:
             notification,
             mock_session,
             notification_service,
-            mock_notification_repo,
+            fake_notification_repo,
             caplog
     ):
         notification = Notification(
@@ -127,7 +127,7 @@ class TestNotificationServiceMarkAsRead:
             type=NotificationType.TICKET_ASSIGNED,
             read=True,
         )
-        await mock_notification_repo.create(notification)
+        await fake_notification_repo.create(notification)
 
         with caplog.at_level(logging.WARNING):
             await notification_service.mark_as_read(notification.id, read_by=notification.user_id)

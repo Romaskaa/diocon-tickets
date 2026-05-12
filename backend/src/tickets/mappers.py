@@ -1,12 +1,10 @@
 from ..media.mappers import map_attachment_to_response
-from .domain.entities import Comment, Project, Ticket, TicketHistoryEntry
+from .domain.entities import Comment, Ticket, TicketHistoryEntry
 from .domain.vo import ReactionType
 from .schemas import (
     CommentResponse,
     CommentWithReactionsResponse,
     HistoryEntryResponse,
-    MembershipResponse,
-    ProjectResponse,
     Tag,
     TicketPreview,
     TicketResponse,
@@ -92,35 +90,10 @@ def map_ticket_to_response(ticket: Ticket) -> TicketResponse:
         description=ticket.description,
         status=ticket.status,
         priority=ticket.priority,
-        assigned_to=ticket.assigned_to,
+        assignee_id=ticket.assignee_id,
         closed_at=ticket.closed_at,
         is_archived=ticket.is_deleted,
         tags=[Tag(name=tag.name, color=tag.color) for tag in ticket.tags],
         attachments=[map_attachment_to_response(attachment) for attachment in ticket.attachments],
         history=[map_history_entry_to_response(history_entry) for history_entry in ticket.history],
-    )
-
-
-def map_project_to_response(project: Project) -> ProjectResponse:
-    return ProjectResponse(
-        id=project.id,
-        created_at=project.created_at,
-        updated_at=project.updated_at,
-        name=project.name,
-        key=f"{project.key}",
-        description=project.description,
-        owner_id=project.owner_id,
-        counterparty_id=project.counterparty_id,
-        created_by=project.created_by,
-        status=project.status,
-        memberships=[
-            MembershipResponse(
-                user_id=membership.user_id,
-                project_role=membership.project_role,
-                added_by=membership.added_by,
-                added_at=membership.added_at,
-                is_active=membership.is_active
-            )
-            for membership in project.memberships
-        ]
     )

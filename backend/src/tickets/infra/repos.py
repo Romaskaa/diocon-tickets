@@ -1,20 +1,20 @@
-from typing import Any, Literal, override
+from typing import Any, override
 
 from collections import defaultdict
 from collections.abc import Callable
 from uuid import UUID
 
-from sqlalchemy import BinaryExpression, Select, and_, exists, func, or_, select
+from sqlalchemy import BinaryExpression, Select, and_, func, or_, select
 from sqlalchemy.orm import selectinload
 
 from ...shared.infra.repos import SqlAlchemyRepository
 from ...shared.schemas import Page, PageParams
-from ..domain.entities import Comment, Membership, Project, Reaction, Ticket
+from ..domain.entities import Comment, Reaction, Ticket
 from ..domain.repos import ReactionStats
-from ..domain.vo import CommentType, ProjectKey, ReactionType
+from ..domain.vo import CommentType, ReactionType
 from ..schemas import TicketFilter
-from .mappers import CommentMapper, MembershipMapper, ProjectMapper, ReactionMapper, TicketMapper
-from .models import CommentOrm, MembershipOrm, ProjectOrm, ReactionOrm, TicketOrm
+from .mappers import CommentMapper, ReactionMapper, TicketMapper
+from .models import CommentOrm, ReactionOrm, TicketOrm
 
 
 class SqlTicketRepository(SqlAlchemyRepository[Ticket, TicketOrm]):
@@ -46,7 +46,7 @@ class SqlTicketRepository(SqlAlchemyRepository[Ticket, TicketOrm]):
             (filters.counterparty_id, lambda value: self.model.counterparty_id == value),
             (filters.status, lambda value: self.model.status == value),
             (filters.priority, lambda value: self.model.priority == value),
-            (filters.assigned_to, lambda value: self.model.assigned_to == value),
+            (filters.assigned_to, lambda value: self.model.assignee_id == value),
             (filters.created_after, lambda value: self.model.created_at >= value),
             (filters.created_before, lambda value: self.model.created_at <= value),
             (
@@ -132,85 +132,6 @@ class SqlTicketRepository(SqlAlchemyRepository[Ticket, TicketOrm]):
         stmt = select(self.model).where(self.model.reporter_id == reporter_id)
 
         return await self._paginate(stmt, params)
-
-
-class SqlProjectRepository(SqlAlchemyRepository[Project, ProjectOrm]):
-    model = ProjectOrm
-    model_mapper = ProjectMapper
-
-    async def get_by_key(self, key: ProjectKey) -> Project | None:
-        stmt = select(self.model).where(self.model.key == key.value)
-        result = await self.session.execute(stmt)
-        model = result.scalar_one_or_none()
-        return None if model is None else self.model_mapper.to_entity(model)
-
-    async def get_existing_keys(self, keys: list[str]) -> set[str]:
-        if not keys:
-            return set()
-
-        stmt = select(self.model.key).where(self.model.key.in_(keys))
-        result = await self.session.execute(stmt)
-
-        return {row[0] for row in result.all()}
-
-    async def get_membership(self, project_id: UUID, user_id: UUID) -> Membership | None:
-        stmt = (
-            select(MembershipOrm)
-            .where(
-                (MembershipOrm.project_id == project_id) &
-                (MembershipOrm.user_id == user_id)
-            )
-        )
-        result = await self.session.execute(stmt)
-        model = result.scalar_one_or_none()
-        return None if model is None else MembershipMapper.to_entity(model)
-
-    async def get_by_user_membership(
-            self,
-            user_id: UUID,
-            pagination: PageParams,
-            role: Literal["owner", "member", "all"] = "all",
-    ) -> Page[Project]:
-        # 1. Базовый запрос + проверка наличия членства в проекте
-        stmt = select(self.model)
-        membership_exists = exists().where(
-            and_(
-                MembershipOrm.project_id == self.model.id,
-                MembershipOrm.user_id == user_id,
-                MembershipOrm.removed_at.is_(None),
-            )
-        )
-
-        # 2. Добавление фильтров в зависимости от выбранной роли
-        if role == "owner":
-            stmt = stmt.where(self.model.owner_id == user_id)
-        elif role == "member":
-            stmt = stmt.where(and_(self.model.owner_id != user_id, membership_exists))
-        else:
-            stmt = stmt.where(or_(self.model.owner_id == user_id, membership_exists))
-
-        # 3. Подсчёт количества для пагинации
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        total_items = await self.session.scalar(count_stmt)
-        if total_items == 0:
-            return Page.create([], total_items, pagination.page, pagination.size)
-
-        # 4. Получение проектов
-        stmt = (
-            stmt
-            .order_by(self.model.created_at.desc())
-            .offset(pagination.offset)
-            .limit(pagination.size)
-        )
-        results = await self.session.execute(stmt)
-        models = results.scalars().all()
-
-        return Page.create(
-            items=[self.model_mapper.to_entity(model) for model in models],
-            total_items=total_items,
-            page=pagination.page,
-            size=pagination.size,
-        )
 
 
 class SqlCommentRepository(SqlAlchemyRepository[Comment, CommentOrm]):
