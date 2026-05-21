@@ -142,6 +142,14 @@ class LanguageToolSettings(BaseSettings):
         return f"http://{self.host}:{self.port}"
 
 
+class EmbeddingsSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="EMBEDDINGS_")
+
+    base_url: str = "http://localhost:7997/"
+    model_name: str = "openai/clip-vit-base-patch32"
+    dimensions: int = 512
+
+
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="APP_")
 
@@ -178,6 +186,7 @@ class Settings(BaseSettings):
     rabbit: RabbitSettings = RabbitSettings()
     yandex_cloud: YandexCloudSettings = YandexCloudSettings()
     language_tool: LanguageToolSettings = LanguageToolSettings()
+    embeddings: EmbeddingsSettings = EmbeddingsSettings()
     admin: AdminSettings = AdminSettings()
 
 
