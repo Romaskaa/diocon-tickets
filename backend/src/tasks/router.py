@@ -2,7 +2,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, status
 
-from .schemas import AssigneeId, NewStatus, TaskResponse, TaskReview
+from ..iam.dependencies import CurrentUserDep
+from .dependencies import TaskServiceDep
+from .schemas import AssigneeId, NewStatus, TaskCreate, TaskEdit, TaskResponse, TaskReview
 
 router = APIRouter(prefix="/tasks", tags=["Задания сотрудникам"])
 
@@ -13,7 +15,10 @@ router = APIRouter(prefix="/tasks", tags=["Задания сотрудникам
     response_model=TaskResponse,
     summary="Создать задачу"
 )
-async def create_task() -> TaskResponse: ...
+async def create_task(
+        data: TaskCreate, current_user: CurrentUserDep, service: TaskServiceDep
+) -> TaskResponse:
+    return await service.create(data, current_user)
 
 
 @router.patch(
@@ -22,7 +27,10 @@ async def create_task() -> TaskResponse: ...
     response_model=TaskResponse,
     summary="Редактировать задачу"
 )
-async def edit_task(task_id: UUID) -> TaskResponse: ...
+async def edit_task(
+        task_id: UUID, data: TaskEdit, current_user: CurrentUserDep, service: TaskServiceDep
+) -> TaskResponse:
+    return await service.edit(task_id, data, current_user)
 
 
 @router.post(
@@ -31,7 +39,10 @@ async def edit_task(task_id: UUID) -> TaskResponse: ...
     response_model=TaskResponse,
     summary="Сменить статус"
 )
-async def move_task_status(task_id: UUID, new_status: NewStatus) -> TaskResponse: ...
+async def move_task_status(
+        task_id: UUID, new_status: NewStatus, current_user: CurrentUserDep, service: TaskServiceDep
+) -> TaskResponse:
+    return await service.move_to(task_id, new_status, current_user)
 
 
 @router.post(
@@ -40,7 +51,13 @@ async def move_task_status(task_id: UUID, new_status: NewStatus) -> TaskResponse
     response_model=TaskResponse,
     summary="Назначить исполнителя"
 )
-async def assign_task(task_id: UUID, assignee_id: AssigneeId) -> TaskResponse: ...
+async def assign_task(
+        task_id: UUID,
+        assignee_id: AssigneeId,
+        current_user: CurrentUserDep,
+        service: TaskServiceDep,
+) -> TaskResponse:
+    return await service.assign_to(task_id, assignee_id, current_user)
 
 
 @router.post(

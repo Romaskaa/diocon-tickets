@@ -123,7 +123,7 @@ def can_request_review(task: Task, user_id: UUID, user_role: UserRole) -> Permis
 def can_review_task(task: Task, user_id: UUID, user_role: UserRole) -> PermissionResult:
     """Может ли пользователь проверить (одобрить/отклонить) задачу"""
 
-    if task.reviewer_id != user_id or user_role not in {UserRole.SUPPORT_MANAGER, UserRole.ADMIN}:
+    if task.reviewer_id != user_id and user_role not in {UserRole.SUPPORT_MANAGER, UserRole.ADMIN}:
         return PermissionResult(False, "Only reviewer or manager can review task")
 
     return PermissionResult(True)

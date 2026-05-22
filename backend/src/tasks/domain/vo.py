@@ -67,7 +67,7 @@ class TaskNumber(ValueObject):
     SEQUENCE_LENGTH: ClassVar[int] = 3
     INTERNAL_PREFIX: ClassVar[str] = "TASK"  # для задач без тикета
     NUMBER_PARTS: ClassVar[int] = 2
-    MAX_LENGTH: ClassVar[int] = 20
+    MAX_LENGTH: ClassVar[int] = 30
 
     def __post_init__(self) -> None:
         if not self.value.strip() or not self.is_valid_format(self.value):

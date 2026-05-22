@@ -51,7 +51,7 @@ class TestTaskNumber:
             "TASK-001",
             "DEV-123",
             "PR-1",
-            "WEB-99-00000001-001",
+            "TICKET-99-00000001-001",
         ],
     )
     def test_valid_format_strings(self, valid_str):

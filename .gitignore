@@ -80,5 +80,6 @@ secrets.env
 # Прочее
 .docker
 tei_cache
+hf_cache
 *.mp3
 backups
