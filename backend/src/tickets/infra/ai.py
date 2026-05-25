@@ -1,97 +1,26 @@
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
-from langchain_openai import ChatOpenAI
 
-from ...core.settings import settings
+from ...core.ai import YANDEX_GPT_CONFIG, get_llm, load_prompt
 from ..schemas import PredictionResponse, TicketPredict
 
-PREDICT_TICKET_PROMPT = """\
-Ты — ассистент системы поддержки.
-На основе заголовка и описания тикета определи его приоритет и подходящие теги.
-
-Доступные приоритеты (от наименее к наиболее срочному):
-- LOW: Низкий. Некритичные вопросы, не влияющие на работу.
-- MEDIUM: Средний. Стандартные запросы, не требующие срочного вмешательства.
-- HIGH: Высокий. Проблемы, которые мешают работе, но не блокируют её.
-- CRITICAL: Критический. Полная остановка работы, угроза безопасности, сбой сервиса.
-
-Теги — это ключевые слова для классификации. Используй только теги из списка ниже, если возможно. Если ни один из существующих не подходит, ты можешь предложить новый тег (название на русском, краткое).
-Существующие теги (с примерными цветами, названия на русском):
-- ошибка (красный, #E53E3E)
-- функциональность (синий, #4299E1)
-- улучшение (зелёный, #38A169)
-- вопрос (жёлтый, #D69E2E)
-- инцидент (оранжевый, #ED8936)
-- биллинг (фиолетовый, #805AD5)
-- доступ (серый, #718096)
-- безопасность (тёмно-красный, #C53030)
-- производительность (оранжевый, #ED8936)
-- интерфейс (голубой, #90CDF4)
-- API (синий, #3182CE)
-- интеграция (синий, #5A67D8)
-- отчётность (зелёный, #38B2AC)
-
-Для нового тега предложи цвет в HEX (например, #FF5733). Имя тега должно быть на русском, кратким и отражать суть.
-Старайся не создавать дубликаты — если подходящий тег уже есть, используй его.
-
-Для каждого предложения укажи уверенность (confidence) от 0 до 1, где 1 — полная уверенность.
-Уверенность для приоритета и тегов может быть разной.
-
-Ответ должен быть строго в формате JSON, без пояснений.
-
-Ниже приведены примеры, которые помогут тебе понять логику.
-
-Пример 1:
-Заголовок: "Не работает вход в личный кабинет"
-Описание: "При попытке войти в систему выскакивает ошибка 500. Прошу срочно решить."
-Ответ:
-{
-  "suggested_priority": "CRITICAL",
-  "suggested_tags": [{"name": "ошибка", "color": "#E53E3E"}, {"name": "доступ", "color": "#718096"}],
-  "confidence": {"priority": 1.0, "tags": 0.9}
-}
-
-Пример 2:
-Заголовок: "Предложение: добавить тёмную тему в интерфейс"
-Описание: "Было бы удобно иметь возможность переключаться на тёмную тему, особенно для ночной работы."
-Ответ:
-{
-  "suggested_priority": "LOW",
-  "suggested_tags": [{"name": "функциональность", "color": "#4299E1"}, {"name": "интерфейс", "color": "#90CDF4"}],
-  "confidence": {"priority": 1.0, "tags": 1.0}
-}
-
-Пример 3:
-Заголовок: "Зависает страница отчётов при большом количестве данных"
-Описание: "При загрузке отчёта за год страница не отвечает 30 секунд, затем вылетает ошибка таймаута."
-Ответ:
-{
-  "suggested_priority": "HIGH",
-  "suggested_tags": [{"name": "производительность", "color": "#ED8936"}, {"name": "ошибка", "color": "#E53E3E"}],
-  "confidence": {"priority": 0.9, "tags": 0.85}
-}
-
-Теперь твоя очередь. Пожалуйста, проанализируй следующий тикет и верни JSON-ответ строго по формату.
-"""  # noqa: E501
+model = get_llm(YANDEX_GPT_CONFIG)
 
 
-async def predict_ticket_fields(data: TicketPredict) -> PredictionResponse:
-    """"""
+async def suggest_ticket_fields(data: TicketPredict) -> PredictionResponse:
+    """
+    Предлагает оптимальные значения для полей тикета (приоритет, теги и.т.д)
+    с помощью ИИ на основе заголовка и описания.
+    """
 
-    model = ChatOpenAI(
-        api_key=settings.yandex_cloud.api_key,
-        model=settings.yandex_cloud.yandexgpt_rc,
-        base_url=settings.yandex_cloud.base_url,
-        temperature=0.2,
-    )
+    prompt = load_prompt("suggest_ticket_fields")
     agent = create_agent(
         model=model,
-        system_prompt=PREDICT_TICKET_PROMPT,
+        system_prompt=prompt["system"],
         response_format=ToolStrategy(PredictionResponse)
     )
-    prompt = f"""\
-    **Заголовок**: {data.title}
-    **Описание**: {data.description}
-    """
-    result = await agent.ainvoke({"messages": [("human", prompt)]})
+    human_message = (
+        "human", prompt["user_template"].format(title=data.title, description=data.description)
+    )
+    result = await agent.ainvoke({"messages": [human_message]})
     return result["structured_response"]

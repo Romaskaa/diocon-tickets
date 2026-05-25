@@ -15,7 +15,11 @@ ENV_DEV_FILE = BASE_DIR / ".env.dev"  # Среда для разработки
 
 load_dotenv(ENV_FILE)
 
+# Jinja шаблоны
 TEMPLATES_DIR = BASE_DIR / "templates"
+
+# Промпты для AI моделей
+PROMPTS_DIR = BASE_DIR / "prompts"
 
 # Имя основного S3 бакета
 S3_BUCKET_NAME = "diocon-tickets-uploads"
