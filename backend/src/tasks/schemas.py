@@ -6,8 +6,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import Body
-from pydantic import BaseModel, Field, NonNegativeFloat
-from pydantic.v1 import NonNegativeInt
+from pydantic import BaseModel, Field, NonNegativeFloat, NonNegativeInt
 
 from ..media.schemas import AttachmentResponse
 from ..shared.schemas import Page
