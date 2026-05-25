@@ -61,7 +61,7 @@ async def check_project_key(key: str, service: ProjectServiceDep) -> KeyCheckRes
 async def create_project(
         current_user: CurrentUserDep, data: ProjectCreate, service: ProjectServiceDep
 ) -> ProjectResponse:
-    return await service.create(data, created_by=current_user.user_id)
+    return await service.create(data, current_user)
 
 
 @router.get(
