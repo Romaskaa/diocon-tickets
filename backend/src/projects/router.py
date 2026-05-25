@@ -12,7 +12,13 @@ from ..shared.schemas import Page
 from .dependencies import ProjectRepoDep, ProjectServiceDep
 from .domain.services import generate_project_key
 from .mappers import map_project_to_response
-from .schemas import KeyCheckResult, MemberCreate, ProjectCreate, ProjectResponse
+from .schemas import (
+    KeyCheckResult,
+    MemberCreate,
+    MembershipResponse,
+    ProjectCreate,
+    ProjectResponse,
+)
 
 router = APIRouter(prefix="/projects", tags=["Проекты"])
 
@@ -114,7 +120,7 @@ async def get_projects(params: PaginationDep, repository: ProjectRepoDep) -> Pag
 @router.post(
     path="/{project_id}/memberships",
     status_code=status.HTTP_201_CREATED,
-    response_model=ProjectResponse,
+    response_model=MembershipResponse,
     summary="Добавление участников в проект"
 )
 async def add_member(
@@ -122,5 +128,5 @@ async def add_member(
         data: MemberCreate,
         current_user: CurrentUserDep,
         service: ProjectServiceDep,
-) -> ProjectResponse:
+) -> MembershipResponse:
     return await service.add_member(project_id, data, current_user)

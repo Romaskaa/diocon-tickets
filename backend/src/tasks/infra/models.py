@@ -47,6 +47,7 @@ class TaskOrm(Base):
             "and_(AttachmentOrm.owner_type=='task', "
             "foreign(AttachmentOrm.owner_id)==TaskOrm.id)"
         ),
+        lazy="selectin",
         viewonly=True,
     )
 
@@ -59,5 +60,7 @@ class TaskSequence(Base):
     last_number: Mapped[int]
 
     __table_args__ = (
-        UniqueConstraint("project_id", "ticket_id", name="uq_task_sequences"),
+        UniqueConstraint(
+            "project_id", "ticket_id", name="uq_task_sequences", postgresql_nulls_not_distinct=True
+        ),
     )

@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import Depends
 
+from ..iam.dependencies import UserRepoDep
 from ..shared.dependencies import EventPublisherDep, SessionDep
 from .domain.repos import MembershipRepository, ProjectRepository
 from .domain.services import ProjectAccessService
@@ -29,12 +30,14 @@ def get_project_service(
         session: SessionDep,
         project_repo: ProjectRepoDep,
         membership_repo: MembershipRepoDep,
+        user_repo: UserRepoDep,
         event_publisher: EventPublisherDep,
 ) -> ProjectService:
     return ProjectService(
         session=session,
         project_repo=project_repo,
         membership_repo=membership_repo,
+        user_repo=user_repo,
         event_publisher=event_publisher,
     )
 
