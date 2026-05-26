@@ -12,7 +12,7 @@ from src.iam.domain.services import (
 )
 from src.iam.domain.vo import UserRole
 from src.iam.infra.repos import SqlInvitationRepository, SqlUserRepository
-from src.shared.schemas import PageParams
+from src.shared.schemas import Pagination
 
 EXPECTED_SUPPORT_USERS_COUNT = 2
 
@@ -173,7 +173,7 @@ class TestSqlUserRepository:
         await session.commit()
 
         page = await user_repo.paginate(
-            PageParams(page=1, size=100),
+            Pagination(page=1, size=100),
             include_roles=[UserRole.SUPPORT_AGENT, UserRole.SUPPORT_MANAGER],
         )
 

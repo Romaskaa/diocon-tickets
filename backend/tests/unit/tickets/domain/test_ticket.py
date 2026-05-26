@@ -6,6 +6,7 @@ from src.iam.domain.exceptions import PermissionDeniedError
 from src.iam.domain.vo import UserRole
 from src.shared.domain.exceptions import InvalidStateError, InvariantViolationError
 from src.tickets.domain.constants import ALLOWED_TRANSITIONS
+from src.tickets.domain.events import TicketAssigned
 from src.tickets.domain.entities import Ticket
 from src.tickets.domain.vo import Tag, TicketNumber, Priority, TicketStatus
 

@@ -14,7 +14,7 @@ from src.iam.routers.invitations import (
 )
 from src.iam.schemas import CurrentUser, InvitationCreate
 from src.shared.domain.exceptions import NotFoundError
-from src.shared.schemas import PageParams
+from src.shared.schemas import Pagination
 
 EXPECTED_INVITATIONS_COUNT = 2
 
@@ -118,7 +118,7 @@ class TestInvitationRouter:
         await fake_invitation_repo.create(second_invitation)
 
         page = await get_invitations(
-            params=PageParams(page=1, size=10),
+            params=Pagination(page=1, size=10),
             repository=fake_invitation_repo,
         )
 

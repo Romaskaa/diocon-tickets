@@ -13,7 +13,7 @@ from src.iam.infra.repos import SqlUserRepository
 from src.iam.routers.users import get_me, get_supports, get_user, get_users
 from src.iam.schemas import CurrentUser
 from src.shared.domain.exceptions import NotFoundError
-from src.shared.schemas import PageParams
+from src.shared.schemas import Pagination
 
 
 @pytest.fixture
@@ -110,7 +110,7 @@ class TestUsersRouter:
         await session.commit()
 
         page = await get_supports(
-            pagination=PageParams(page=1, size=100),
+            pagination=Pagination(page=1, size=100),
             repository=user_repo,
         )
 
@@ -149,7 +149,7 @@ class TestUsersRouter:
         await session.commit()
 
         page = await get_users(
-            params=PageParams(page=1, size=100),
+            params=Pagination(page=1, size=100),
             repository=user_repo,
             include_roles=[UserRole.CUSTOMER],
         )

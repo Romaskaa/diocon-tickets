@@ -5,7 +5,7 @@ import pytest
 from src.projects.domain.entities import Project
 from src.projects.domain.vo import ProjectKey, ProjectRole
 from src.projects.infra.repos import SqlMembershipRepository, SqlProjectRepository
-from src.shared.schemas import PageParams
+from src.shared.schemas import Pagination
 
 
 @pytest.fixture
@@ -160,7 +160,7 @@ async def test_get_by_user_membership_returns_owned_and_member_projects(session,
 
     page = await project_repo.get_by_user_membership(
         user_id=user_id,
-        pagination=PageParams(page=1, size=10),
+        pagination=Pagination(page=1, size=10),
         owner_only=False,
     )
 
@@ -204,7 +204,7 @@ async def test_get_by_user_membership_owner_only_returns_only_owned_projects(ses
 
     page = await project_repo.get_by_user_membership(
         user_id=user_id,
-        pagination=PageParams(page=1, size=10),
+        pagination=Pagination(page=1, size=10),
         owner_only=True,
     )
 
@@ -251,7 +251,7 @@ async def test_membership_paginate_filters_by_project_id(session, project_repo, 
     await session.commit()
 
     page = await membership_repo.paginate(
-        PageParams(page=1, size=10),
+        Pagination(page=1, size=10),
         project_id=first_project.id,
     )
 
@@ -289,7 +289,7 @@ async def test_membership_paginate_filters_by_project_roles(session, project_rep
     await session.commit()
 
     page = await membership_repo.paginate(
-        PageParams(page=1, size=10),
+        Pagination(page=1, size=10),
         project_id=project.id,
         include_project_roles=[ProjectRole.MANAGER],
     )

@@ -8,7 +8,7 @@ from src.crm.infra.repos import SqlCounterpartyRepository
 from src.iam.domain.services import create_customer
 from src.iam.domain.vo import UserRole
 from src.iam.infra.repos import SqlUserRepository
-from src.shared.schemas import PageParams
+from src.shared.schemas import Pagination
 from src.products.domain.entities import SoftwareProduct
 from src.products.domain.vo import ProductCategory, ProductStatus
 from src.products.infra.repo import SqlProductRepository
@@ -217,7 +217,7 @@ class TestSqlCounterpartyRepository:
 
         page = await counterparty_repo.get_customers(
             counterparty.id,
-            PageParams(page=1, size=10),
+            Pagination(page=1, size=10),
         )
 
         found_ids = {user.id for user in page.items}
@@ -242,7 +242,7 @@ class TestSqlCounterpartyRepository:
 
         page = await counterparty_repo.get_customers(
             counterparty.id,
-            PageParams(page=1, size=10),
+            Pagination(page=1, size=10),
         )
 
         assert page.items == []
@@ -280,7 +280,7 @@ class TestSqlCounterpartyRepository:
 
         page = await counterparty_repo.get_products(
             counterparty.id,
-            PageParams(page=1, size=10),
+            Pagination(page=1, size=10),
         )
 
         found_ids = {product.id for product in page.items}
@@ -305,7 +305,7 @@ class TestSqlCounterpartyRepository:
 
         page = await counterparty_repo.get_products(
             counterparty.id,
-            PageParams(page=1, size=10),
+            Pagination(page=1, size=10),
         )
 
         assert page.items == []

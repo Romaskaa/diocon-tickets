@@ -5,14 +5,14 @@ import pytest
 from src.iam.domain.vo import UserRole
 from src.projects.domain.entities import Project
 from src.projects.infra.repos import SqlProjectRepository
-from src.shared.schemas import PageParams
+from src.shared.schemas import Pagination
 from src.tickets.domain.entities import Comment, Reaction, Ticket
 from src.tickets.domain.vo import (
     CommentType,
     ReactionType,
     Tag,
     TicketNumber,
-    TicketPriority,
+    Priority,
     TicketStatus,
 )
 from src.tickets.infra.repos import (
@@ -68,7 +68,7 @@ async def saved_ticket(session, ticket_repo):
         created_by_role=UserRole.ADMIN,
         title=f"Интеграционный тикет {uuid4()}",
         description="Тикет для интеграционных тестов репозитория",
-        priority=TicketPriority.HIGH,
+        priority=Priority.HIGH,
         tags=[Tag(name="integration", color="#3498db")],
     )
     await ticket_repo.create(ticket)
@@ -136,10 +136,10 @@ class TestSqlTicketRepository:
         """
 
         page = await ticket_repo.paginate(
-            params=PageParams(page=1, size=10),
+            params=Pagination(page=1, size=10),
             filters=TicketFilter(
                 status=TicketStatus.NEW,
-                priority=TicketPriority.HIGH,
+                priority=Priority.HIGH,
                 tags=["integration"],
             ),
         )
@@ -147,7 +147,7 @@ class TestSqlTicketRepository:
         found_ids = {ticket.id for ticket in page.items}
         assert saved_ticket.id in found_ids
         assert all(ticket.status == TicketStatus.NEW for ticket in page.items)
-        assert all(ticket.priority == TicketPriority.HIGH for ticket in page.items)
+        assert all(ticket.priority == Priority.HIGH for ticket in page.items)
 
     @pytest.mark.asyncio
     async def test_get_by_reporter_returns_only_reporter_tickets(
@@ -164,14 +164,14 @@ class TestSqlTicketRepository:
             created_by_role=UserRole.ADMIN,
             title=f"Чужой тикет {uuid4()}",
             description="Тикет другого инициатора",
-            priority=TicketPriority.HIGH,
+            priority=Priority.HIGH,
         )
         await ticket_repo.create(other_ticket)
         await session.commit()
 
         page = await ticket_repo.get_by_reporter(
             reporter_id=saved_ticket.reporter_id,
-            params=PageParams(page=1, size=10),
+            params=Pagination(page=1, size=10),
         )
 
         found_ids = {ticket.id for ticket in page.items}
@@ -202,11 +202,11 @@ class TestSqlCommentRepository:
 
         public_page = await comment_repo.get_by_ticket(
             ticket_id=saved_ticket.id,
-            pagination=PageParams(page=1, size=10),
+            pagination=Pagination(page=1, size=10),
         )
         internal_page = await comment_repo.get_by_ticket(
             ticket_id=saved_ticket.id,
-            pagination=PageParams(page=1, size=10),
+            pagination=Pagination(page=1, size=10),
             include_internal=True,
         )
 
@@ -243,11 +243,11 @@ class TestSqlCommentRepository:
 
         public_page = await comment_repo.get_replies(
             parent_comment_id=saved_comment.id,
-            pagination=PageParams(page=1, size=10),
+            pagination=Pagination(page=1, size=10),
         )
         internal_page = await comment_repo.get_replies(
             parent_comment_id=saved_comment.id,
-            pagination=PageParams(page=1, size=10),
+            pagination=Pagination(page=1, size=10),
             include_internal=True,
         )
 
