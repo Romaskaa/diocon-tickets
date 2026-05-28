@@ -203,6 +203,46 @@ async def test_get_project_returns_project_by_id(session, projects_client, proje
 
 
 @pytest.mark.asyncio
+async def test_get_projects_returns_paginated_projects(
+    session,
+    projects_client,
+    project_repo,
+    current_support_manager,
+):
+    """
+    Проверяем API получения всех проектов: endpoint нужен для админского списка
+    проектов и должен вернуть page response из реального SQL-репозитория.
+    Данные: два проекта в реальной БД.
+    """
+
+    first_project = make_project(
+        key=f"LST{uuid4().hex[:6].upper()}",
+        owner_id=current_support_manager.user_id,
+    )
+    second_project = make_project(
+        key=f"LST{uuid4().hex[:6].upper()}",
+        owner_id=current_support_manager.user_id,
+    )
+
+    await project_repo.create(first_project)
+    await project_repo.create(second_project)
+    await session.commit()
+
+    response = await projects_client.get(
+        "/api/v1/projects",
+        params={"page": 1, "size": 10},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    found_ids = {item["id"] for item in data["items"]}
+
+    assert str(first_project.id) in found_ids
+    assert str(second_project.id) in found_ids
+    assert data["total_items"] >= 2
+
+
+@pytest.mark.asyncio
 async def test_add_member_returns_created_membership(session, projects_client, project_repo, user_repo, current_support_manager):
     """
     Проверяем API добавления участника проекта: он должен найти проект и
@@ -400,4 +440,3 @@ async def test_create_project_forbidden_for_support_agent(session, current_suppo
     assert response.status_code == status.HTTP_403_FORBIDDEN
     data = response.json()
     assert data["error"]["code"] == "PERMISSION_DENIED"
-

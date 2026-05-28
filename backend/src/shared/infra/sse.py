@@ -11,25 +11,26 @@ logger = logging.getLogger(__name__)
 class SSEManager:
     """
     Управляет активными SSE-соединениями (Server-Sent Events) пользователей.
-    Отвечает только за локальную доставку уведомлений.
+    Отвечает только за локальную доставку уведомлений (работает только
+    в рамках одного процесса).
     """
 
     def __init__(self) -> None:
         self.local_queues: dict[UUID, set[asyncio.Queue[Any]]] = defaultdict(set)
         self._lock = asyncio.Lock()
 
-    async def connect(self, user_id: UUID, queue: asyncio.Queue):
+    async def connect(self, user_id: UUID, queue: asyncio.Queue[Any]) -> None:
         """Подключение клиента к SSE каналу"""
 
         async with self._lock:
             self.local_queues[user_id].add(queue)
 
         logger.info(
-            "SSE connected for user %s. Active queues: %s",
-            user_id, list(self.local_queues[user_id])
+            "SSE connected for user %s | Total connections: %s",
+            user_id, len(self.local_queues[user_id])
         )
 
-    async def disconnect(self, user_id: UUID, queue: asyncio.Queue):
+    async def disconnect(self, user_id: UUID, queue: asyncio.Queue[Any]):
         """Отключение клиента"""
 
         async with self._lock:
@@ -39,15 +40,15 @@ class SSEManager:
 
         logger.info("SSE disconnected for user %s", user_id)
 
-    async def broadcast_to_local(self, user_id: UUID, message: dict[str, Any]) -> None:
-        """Отправка сообщений по всем локальным SSE-соединениям"""
+    async def send_to_user(self, user_id: UUID, message: Any) -> None:
+        """Отправка сообщения подключенному пользователю"""
 
         # 1. Проверка есть ли у пользователя локальное соединение
         if user_id not in self.local_queues:
             return
 
         # 2. Объявление 'мёртвых' соединений
-        dead_queues = []
+        dead_queues: list[asyncio.Queue[Any]] = []
 
         # 3. Отправка во все соединения
         for queue in list(self.local_queues[user_id]):
@@ -61,8 +62,3 @@ class SSEManager:
             async with self._lock:
                 for queue in dead_queues:
                     self.local_queues[user_id].discard(queue)
-
-    async def send_to_user(self, user_id: UUID, message: dict[str, Any]) -> None:
-        """Отправка сообщения пользователю"""
-
-        await self.broadcast_to_local(user_id, message)

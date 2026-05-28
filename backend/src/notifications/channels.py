@@ -2,14 +2,15 @@ from typing import ClassVar, Protocol
 
 import logging
 
+from faststream.rabbit import RabbitBroker
+
 from ..iam.domain.repos import UserRepository
 from ..shared.domain.exceptions import EmailSendingFailedError
 from ..shared.infra.mail import SmtpMailSender
-from ..shared.infra.websocket import WebsocketManager
 from .domain.entities import Notification
 from .domain.exceptions import NotificationSendingFailedError
 from .domain.vo import ChannelType, NotificationType
-from .mappers import map_notification_to_dict
+from .mappers import map_notification_to_response
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,9 @@ class NotificationChannel(Protocol):
 
 # Маппинг типов уведомлений к email шаблону
 EMAIL_TEMPLATE_MAP: dict[NotificationType, str] = {
+    NotificationType.TICKET_CREATED: "email/ticket_created.html",
+    NotificationType.TICKET_ASSIGNED: "email/assigned.html",
+    NotificationType.TICKET_STATUS_CHANGED: "email/ticket_status_changed.html",
 }
 
 
@@ -60,12 +64,9 @@ class EmailChannel:
 class InAppChannel:
     channel_type = ChannelType.IN_APP
 
-    def __init__(self, ws_manager: WebsocketManager) -> None:
-        self.ws_manager = ws_manager
+    def __init__(self, broker: RabbitBroker) -> None:
+        self.broker = broker
 
     async def send(self, notification: Notification) -> None:
-        payload = {
-            "type": "notification",
-            "notification": map_notification_to_dict(notification)
-        }
-        await self.ws_manager.send_to_user(notification.user_id, payload)
+        payload = map_notification_to_response(notification)
+        await self.broker.publish(payload, queue="notifications.sse")

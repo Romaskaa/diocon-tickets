@@ -366,7 +366,7 @@ class ProjectAccessService:
                 "Only CUSTOMER_MANAGER can approve tickets in own counterparty"
             )
 
-        return PermissionResult(False)
+        return PermissionResult(False, "You do not have permission to change ticket")
 
     async def can_create_task(
             self, project_id: UUID, user_id: UUID, user_role: UserRole

@@ -13,6 +13,7 @@ from src.core.database import Base
 from src.crm.infra.models import CounterpartyOrm
 from src.iam.infra.models import InvitationOrm, UserOrm
 from src.media.infra.models import AttachmentOrm
+from src.notifications.infra.models import NotificationOrm, UserPreferenceOrm
 from src.products.infra.models import SoftwareProductOrm
 from src.projects.infra.models import MembershipOrm, ProjectOrm
 from src.tasks.infra.models import TaskOrm, TaskSequence

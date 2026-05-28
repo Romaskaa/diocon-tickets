@@ -4,21 +4,21 @@ from fastapi import Depends, Query, Request
 from pydantic import PositiveInt
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.broker import broker
 from ..core.database import get_db
 from ..core.redis import redis_client
 from ..core.settings import settings
+from ..event_config import EVENT_TOPIC_MAP
 from .domain.events import EventPublisher
 from .domain.exceptions import RateLimitExceededError
-from .infra.events import EventBus
+from .infra.events import FastStreamEventPublisher
 from .infra.mail import SmtpMailSender
 from .infra.rate_limiter import IdentifierFunc, RateLimiter, ip_identifier
 from .infra.spell_checker import LanguageToolSpellChecker, SpellChecker
-from .infra.websocket import WebsocketManager
+from .infra.sse import SSEManager
 from .schemas import Pagination
 
-event_bus = EventBus()
-
-ws_manager = WebsocketManager()
+sse_manager = SSEManager()
 
 spell_checker = LanguageToolSpellChecker(
     language=settings.language_tool.language, remote_server=settings.language_tool.url
@@ -52,8 +52,8 @@ def get_pagination(
 PaginationDep = Annotated[Pagination, Depends(get_pagination)]
 
 
-def get_event_publisher() -> EventBus:
-    return event_bus
+def get_event_publisher() -> FastStreamEventPublisher:
+    return FastStreamEventPublisher(broker, event_topic_map=EVENT_TOPIC_MAP)
 
 
 EventPublisherDep = Annotated[EventPublisher, Depends(get_event_publisher)]

@@ -4,8 +4,14 @@ import pytest
 
 from src.iam.domain.vo import UserRole
 from src.projects.domain.entities import Membership, Project
-from src.projects.domain.services import ProjectAccessService
+from src.projects.domain.services import (
+    ProjectAccessService,
+    generate_project_key,
+    get_allowed_project_roles_for_user,
+)
 from src.projects.domain.vo import ProjectRole
+from src.tickets.domain.entities import Ticket
+from src.tickets.domain.vo import TicketNumber, TicketStatus
 from src.shared.utils.time import current_datetime
 
 # Правильный набор ролей для добавления участника в проект
@@ -64,6 +70,107 @@ def make_membership(
         added_by=uuid4(),
         deleted_at=current_datetime() if is_deleted else None,
     )
+
+
+def make_ticket(
+        *,
+        status: TicketStatus = TicketStatus.OPEN,
+        counterparty_id: UUID | None = None,
+) -> Ticket:
+    ticket = Ticket.create(
+        ticket_number=TicketNumber("INT-26-00000001"),
+        reporter_id=uuid4(),
+        created_by=uuid4(),
+        created_by_role=UserRole.SUPPORT_AGENT,
+        title="Project access ticket",
+        project_id=uuid4(),
+        counterparty_id=counterparty_id,
+    )
+    ticket.status = status
+    list(ticket.collect_events())
+    return ticket
+
+
+class TestGenerateProjectKey:
+    """
+    Проверяем генерацию ключа проекта: она нужна для endpoint key-suggestion
+    и автоподстановки короткого идентификатора проекта.
+    """
+
+    def test_empty_name_returns_default_key(self):
+        """
+        Проверяем fallback генерации ключа: если имя пустое, сервис должен
+        вернуть дефолтное значение, а не пустую строку.
+        Данные: пустое имя проекта.
+        """
+
+        assert generate_project_key("") == "PRJ"
+
+    def test_name_without_letters_returns_default_key(self):
+        """
+        Проверяем очистку имени проекта: если после удаления цифр и символов
+        не осталось слов, сервис должен вернуть дефолтный ключ.
+        Данные: строка только из цифр и знаков.
+        """
+
+        assert generate_project_key("123 !!!") == "PRJ"
+
+    def test_single_short_word_is_extended_to_minimum_length(self):
+        """
+        Проверяем минимальную длину ключа: однобуквенное имя должно стать
+        ключом из двух символов, чтобы пройти правила ProjectKey.
+        Данные: название проекта из одной буквы.
+        """
+
+        assert generate_project_key("A") == "AA"
+
+    def test_three_words_use_first_letters(self):
+        """
+        Проверяем генерацию по нескольким словам: для длинного названия берутся
+        первые буквы первых трёх слов.
+        Данные: название из трёх английских слов.
+        """
+
+        assert generate_project_key("Customer Support Portal") == "CSP"
+
+
+class TestAllowedProjectRolesForUser:
+    """
+    Проверяем соответствие системной роли пользователя и разрешённых ролей
+    внутри проекта. Это базовое правило используется при добавлении участников.
+    """
+
+    @pytest.mark.parametrize("user_role", [UserRole.CUSTOMER, UserRole.CUSTOMER_ADMIN])
+    def test_customer_roles_get_customer_project_roles(self, user_role):
+        """
+        Проверяем клиентские системные роли: им нельзя назначать внутренние
+        project-роли вроде MANAGER или CONTRIBUTOR.
+        Данные: customer/customer_admin роль.
+        """
+
+        roles = get_allowed_project_roles_for_user(user_role)
+
+        assert roles == {
+            ProjectRole.VIEWER,
+            ProjectRole.CUSTOMER,
+            ProjectRole.CUSTOMER_MANAGER,
+        }
+
+    @pytest.mark.parametrize("user_role", [UserRole.SUPPORT_AGENT, UserRole.DEVELOPER])
+    def test_internal_roles_get_internal_project_roles(self, user_role):
+        """
+        Проверяем внутренние системные роли: им нельзя назначать клиентские
+        project-роли CUSTOMER и CUSTOMER_MANAGER.
+        Данные: support/developer роль.
+        """
+
+        roles = get_allowed_project_roles_for_user(user_role)
+
+        assert roles == {
+            ProjectRole.VIEWER,
+            ProjectRole.CONTRIBUTOR,
+            ProjectRole.MANAGER,
+        }
 
 
 class TestCanCreateProject:

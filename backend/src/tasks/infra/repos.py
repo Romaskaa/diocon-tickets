@@ -150,14 +150,14 @@ class SqlTaskRepository(SqlAlchemyRepository[Task, TaskOrm]):
             conditions.append(self.model.assignee_id == assignee_id)
 
         if priorities is not None:
-            conditions.append(self.model.status.in_(priorities))
+            conditions.append(self.model.priorities.in_(priorities))
 
         if overdue_only:
-            now = current_datetime()
-            conditions.append(
-                self.model.due_date < now,
-                self.model.status.notin_([TaskStatus.DONE, TaskStatus.CANCELLED])
-            )
+            today = current_datetime().date()
+            conditions.extend([
+                self.model.due_date < today,
+                self.model.status.notin_([TaskStatus.DONE, TaskStatus.CANCELLED]),
+            ])
 
         # Пагинация задач для каждого статуса
         grouped: dict[TaskStatus, Page[TaskView]] = {}

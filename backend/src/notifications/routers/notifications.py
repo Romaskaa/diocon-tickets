@@ -1,17 +1,24 @@
 from typing import Annotated
 
+import asyncio
+import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Query, status
+from fastapi import Query, Request, status
+from faststream.rabbit import RabbitQueue
+from faststream.rabbit.fastapi import RabbitRouter
+from sse_starlette.sse import EventSourceResponse, ServerSentEvent
 
 from ...iam.dependencies import CurrentUserDep
-from ...shared.dependencies import PaginationDep
-from ...shared.schemas import Page
+from ...shared.dependencies import PaginationDep, sse_manager
+from ...shared.schemas import Page, Pagination
 from ..dependencies import NotificationRepoDep, NotificationServiceDep
 from ..mappers import map_notification_to_response
 from ..schemas import NotificationResponse, UnreadCountOut
 
-router = APIRouter(prefix="/notifications", tags=["Уведомления"])
+logger = logging.getLogger(__name__)
+
+router = RabbitRouter(prefix="/notifications", tags=["Уведомления"])
 
 
 @router.get(
@@ -56,3 +63,66 @@ async def mark_as_read(
         service: NotificationServiceDep,
 ) -> NotificationResponse:
     return await service.mark_as_read(notification_id, read_by=current_user.user_id)
+
+
+@router.subscriber(
+    queue=RabbitQueue("notifications.sse", durable=True, exclusive=False),
+    description="Отправка уведомления в локальную очередь"
+)
+async def handle_notification(notification: NotificationResponse) -> None:
+    await sse_manager.send_to_user(notification.user_id, notification)
+
+
+@router.get(
+    path="/stream",
+    response_class=EventSourceResponse,
+    summary="Соединение для отправки уведомлений",
+)
+async def notification_stream(
+        request: Request, current_user: CurrentUserDep, repository: NotificationRepoDep
+):
+    # Инициализация подключения
+    queue: asyncio.Queue[NotificationResponse] = asyncio.Queue(maxsize=10)
+    await sse_manager.connect(current_user.user_id, queue)
+
+    async def event_generator():
+
+        try:
+            # 1. Отправка последних непрочитанных уведомлений при подключении
+            unread_notifications = await repository.get_by_user(
+                user_id=current_user.user_id,
+                pagination=Pagination(page=1, size=50),
+                unread_only=True,
+            )
+            for notification in unread_notifications.items:
+                payload = {
+                    "type": "notification",
+                    "notification": map_notification_to_response(
+                        notification
+                    ).model_dump(mode="json"),
+                }
+                yield ServerSentEvent(data=payload)
+
+            # 2. Основной цикл прослушивания очереди
+            while True:
+                if await request.is_disconnected():
+                    logger.debug("Client disconnected (SSE)")
+                    break
+
+                try:
+                    # Ожидание сообщения из очереди
+                    message = await asyncio.wait_for(queue.get(), timeout=25.0)
+                    payload = {
+                        "type": "notification",
+                        "notification": message.model_dump(mode="json")
+                    }
+                    yield ServerSentEvent(data=payload)
+                except TimeoutError:
+                    # Heartbeat - для удержания соединения
+                    yield ServerSentEvent(comment="ping")
+
+        finally:
+            # Всегда отключаем пользователя при завершении
+            await sse_manager.disconnect(current_user.user_id, queue)
+
+    return EventSourceResponse(event_generator(), ping=20)

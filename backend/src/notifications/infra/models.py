@@ -3,12 +3,12 @@ from typing import Any
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import TEXT, DateTime, Enum
+from sqlalchemy import TEXT, DateTime, Enum, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ...core.database import Base
-from ..domain.vo import NotificationType
+from ..domain.vo import ChannelType, NotificationType
 
 
 class NotificationOrm(Base):
@@ -27,5 +27,9 @@ class UserPreferenceOrm(Base):
 
     user_id: Mapped[UUID]
     notification_type: Mapped[NotificationType] = mapped_column(Enum(NotificationType))
-    enabled_channels: Mapped[list[str]] = mapped_column(JSONB)
+    enabled_channels: Mapped[list[ChannelType]] = mapped_column(JSONB)
     muted_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "notification_type", name="uq_user_notification_type"),
+    )

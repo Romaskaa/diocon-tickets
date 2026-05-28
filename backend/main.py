@@ -9,12 +9,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 
+from src.core.broker import broker_router
 from src.core.logging import configure_logging
 from src.core.redis import redis_client
 from src.core.settings import settings
 from src.crm.router import router as counterparty_router
 from src.iam.routers import router as iam_router
 from src.media.router import router as media_router
+from src.notifications.infra.handlers import router as notifications_broker_router
+from src.notifications.routers.notifications import router as notification_router
 from src.products.router import router as product_router
 from src.projects.router import router as project_router
 from src.shared.domain.exceptions import AppError
@@ -28,18 +31,21 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Настройка логирования
     configure_logging(log_level="INFO")
-
-    # Проверка доступности Redis
-    await redis_client.ping()
 
     # Выполнение необходимых команд для запуска приложения
     await run_cli_command(sys.executable, "-m", "alembic", "upgrade", "head")
     await run_cli_command(sys.executable, "-m", "cli", "create-first-admin")
     await run_cli_command(sys.executable, "-m", "cli", "init-s3-buckets")
-    yield
+
+    # Проверка доступности Redis
+    await redis_client.ping()
+
+    # Запуск брокера сообщений
+    async with broker_router.lifespan_context(app):
+        yield
 
 
 app = FastAPI(
@@ -56,6 +62,11 @@ Instrumentator(
     excluded_handlers=["/health", "/metrics"]
 ).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
+# Rabbit обработчики
+broker_router.include_router(notification_router)
+broker_router.include_router(notifications_broker_router)
+
+# HTTP роутеры
 router = APIRouter(prefix="/api/v1")
 
 router.include_router(iam_router)
@@ -68,6 +79,7 @@ router.include_router(project_router)
 router.include_router(task_router)
 
 app.include_router(router)
+app.include_router(broker_router)
 
 app.add_middleware(
     CORSMiddleware,

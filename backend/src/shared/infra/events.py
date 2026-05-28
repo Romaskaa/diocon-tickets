@@ -1,3 +1,5 @@
+from typing import TypeVar
+
 import asyncio
 import logging
 from collections import defaultdict
@@ -5,10 +7,11 @@ from collections.abc import Awaitable, Callable
 
 from faststream.rabbit import RabbitBroker
 
-from ...tickets.domain.events import TicketAssigned, TicketCreated
 from ..domain.events import Event
 
 logger = logging.getLogger(__name__)
+
+EventT = TypeVar("EventT", bound=Event)
 
 
 class EventBus:
@@ -21,12 +24,12 @@ class EventBus:
         self._is_running = False
 
     def subscribe(self, event_type: type[Event], handler: Callable) -> None:
-        """Подписка обработчика на событие"""
+        """Подписка обработчика на событие."""
 
         self._handlers[event_type].append(handler)
 
-    async def publish(self, event: Event) -> None:
-        """Публикация события (добавление в очередь)"""
+    async def publish(self, event: EventT) -> None:
+        """Публикация события: добавляет событие во внутреннюю очередь."""
 
         try:
             await self._queue.put(event)
@@ -34,13 +37,13 @@ class EventBus:
             logger.exception("EventBus queue is full! Dropping event: %s", type(event).__name__)
 
     async def publish_all(self, events: list[Event]) -> None:
-        """Публикация списка событий (удобно после сохранения агрегата)"""
+        """Публикация списка событий."""
 
         for event in events:
             await self.publish(event)
 
     async def _dispatch(self, event: Event) -> None:
-        """Вызов всех обработчиков для данного события"""
+        """Вызов всех обработчиков для события."""
 
         handlers = self._handlers.get(type(event), [])
 
@@ -49,7 +52,6 @@ class EventBus:
             return
 
         for handler in handlers:
-            # noinspection PyBroadException
             try:
                 if asyncio.iscoroutinefunction(handler):
                     await handler(event)
@@ -63,10 +65,9 @@ class EventBus:
                 )
 
     async def _process_events(self) -> None:
-        """Основной цикл обработки событий из очереди"""
+        """Основной цикл обработки событий из очереди."""
 
         while self._is_running:
-            # noinspection PyBroadException
             try:
                 event = await self._queue.get()
                 await self._dispatch(event)
@@ -77,7 +78,7 @@ class EventBus:
                 logger.exception("Unexpected error in EventBus processing loop")
 
     async def start(self) -> None:
-        """Запуск обработчика событий в фоне"""
+        """Запуск фонового обработчика событий."""
 
         if self._is_running:
             return
@@ -87,7 +88,7 @@ class EventBus:
         logger.info("EventBus started")
 
     async def stop(self) -> None:
-        """Остановка обработчика"""
+        """Остановка фонового обработчика событий."""
 
         self._is_running = False
 
@@ -100,19 +101,15 @@ class EventBus:
         logger.info("EventBus stopped")
 
 
-# Маппинг доменных событий к топикам в которых они будут обработаны (очереди)
-EVENT_TOPIC_MAP: dict[type[Event], str] = {
-    TicketCreated: "tickets.created",
-    TicketAssigned: "tickets.assigned",
-}
-
-
 class FastStreamEventPublisher:
-    def __init__(self, broker: RabbitBroker) -> None:
+    def __init__(
+            self, broker: RabbitBroker, event_topic_map: dict[type[Event], str]
+    ) -> None:
         self.broker = broker
+        self.event_topic_map = event_topic_map
 
-    async def publish(self, event: Event) -> None:
-        topic = EVENT_TOPIC_MAP.get(type(event))
+    async def publish(self, event: EventT) -> None:
+        topic = self.event_topic_map.get(type(event))
         if topic is None:
             logger.warning(
                 "Domain event `%s` was not handled! No such topic registered.",

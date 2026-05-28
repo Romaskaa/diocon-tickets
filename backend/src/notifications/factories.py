@@ -1,12 +1,13 @@
 from uuid import UUID
 
+from ..core.settings import settings
 from ..tickets.domain.events import TicketAssigned, TicketCreated
 from .domain.entities import Notification
 from .domain.vo import NotificationType
 
 
 class NotificationFactory:
-    """Фабрика для создания уведомлений из доменных событий"""
+    """Фабрика для создания уведомлений из доменных событий."""
 
     @staticmethod
     def from_ticket_created(event: TicketCreated, targets: list[UUID]) -> list[Notification]:
@@ -20,6 +21,10 @@ class NotificationFactory:
                     "ticket_id": f"{event.ticket_id}",
                     "ticket_number": event.number,
                     "title": event.title,
+                    "ticket_title": event.title,
+                    "ticket_url": f"{settings.frontend_url}/tickets/{event.number}",
+                    "app_name": settings.app.name,
+                    "support_email": settings.mail.support_email,
                 },
             )
             for target in targets
@@ -39,11 +44,15 @@ class NotificationFactory:
                     "ticket_id": f"{event.ticket_id}",
                     "ticket_number": event.number,
                     "title": event.title,
+                    "ticket_title": event.title,
+                    "ticket_url": f"{settings.frontend_url}/tickets/{event.number}",
                     "assigned_by": f"{event.assigned_by}",
                     "assignee_id": f"{event.assignee_id}",
-                    "old_assignee": None
-                    if event.old_assignee is None
-                    else f"{event.old_assignee}",
+                    "old_assignee": (
+                        None if event.old_assignee is None else f"{event.old_assignee}"
+                    ),
+                    "app_name": settings.app.name,
+                    "support_email": settings.mail.support_email,
                 },
             )
             for target in targets

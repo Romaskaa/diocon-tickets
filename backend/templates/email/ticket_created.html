@@ -3,226 +3,252 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Тикет создан</title>
+  <title>Новый тикет #{{ ticket_number }} — {{ app_name | default("ДИО-Консалт") }}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap');
 
     body {
-        margin: 0;
-        padding: 0;
-        background: #f5f5f6;
-        color: #111111;
-        font-family: 'Open Sans', Arial, Helvetica, sans-serif;
-        line-height: 1.5;
+      margin: 0;
+      padding: 0;
+      background: #f5f5f6;
+      color: #111111;
+      font-family: 'Open Sans', Arial, Helvetica, sans-serif;
+      line-height: 1.5;
     }
 
     table {
-        border-collapse: collapse;
+      border-collapse: collapse;
     }
 
     .page {
-        width: 100%;
-        background: #f5f5f6;
-        padding: 40px 16px;
+      width: 100%;
+      background: #f5f5f6;
+      padding: 40px 16px;
     }
 
     .shell {
-        width: 100%;
-        max-width: 640px;
-        margin: 0 auto;
+      width: 100%;
+      max-width: 640px;
+      margin: 0 auto;
     }
 
     .glass {
-        overflow: hidden;
-        background: #ffffff;
-        background:
-            linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.72)),
-            rgba(255, 255, 255, 0.86);
-        border-radius: 20px;
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
+      overflow: hidden;
+      background: #ffffff;
+      background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.72)),
+        rgba(255, 255, 255, 0.86);
+      border-radius: 20px;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
     }
 
     .inner {
-        background: rgba(255, 255, 255, 0.88);
-        border: 1px solid rgba(17, 17, 17, 0.07);
-        border-radius: 20px;
-        box-shadow:
-            0 2px 4px rgba(17, 17, 17, 0.06),
-            0 18px 42px rgba(17, 17, 17, 0.14),
-            inset 0 1px 0 rgba(255, 255, 255, 0.96);
-        padding: 32px;
+      background: rgba(255, 255, 255, 0.88);
+      border: 1px solid rgba(17, 17, 17, 0.07);
+      border-radius: 20px;
+      box-shadow:
+        0 2px 4px rgba(17, 17, 17, 0.06),
+        0 18px 42px rgba(17, 17, 17, 0.14),
+        inset 0 1px 0 rgba(255, 255, 255, 0.96);
+      padding: 32px;
     }
 
     .brand {
-        color: rgba(17, 17, 17, 0.48);
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
+      color: rgba(17, 17, 17, 0.48);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
     }
 
     .status-pill {
-        display: inline-block;
-        margin-top: 18px;
-        padding: 7px 12px;
-        color: #991b1b;
-        font-size: 13px;
-        font-weight: 700;
-        background: rgba(153, 27, 27, 0.10);
-        border: 1px solid rgba(185, 28, 28, 0.22);
-        border-radius: 999px;
+      display: inline-block;
+      margin-top: 18px;
+      padding: 7px 12px;
+      color: #991b1b;
+      font-size: 13px;
+      font-weight: 700;
+      background: rgba(153, 27, 27, 0.10);
+      border: 1px solid rgba(185, 28, 28, 0.22);
+      border-radius: 999px;
     }
 
     h1 {
-        margin: 18px 0 12px;
-        color: #111111;
-        font-size: 30px;
-        line-height: 1.18;
-        font-weight: 800;
+      margin: 18px 0 12px;
+      color: #111111;
+      font-size: 30px;
+      line-height: 1.18;
+      font-weight: 800;
     }
 
     .lead {
-        margin: 0 0 26px;
-        color: rgb(0, 0, 0);
-        font-size: 16px;
+      margin: 0 0 26px;
+      color: #000000;
+      font-size: 16px;
     }
 
     .details {
-        width: 100%;
-        overflow: hidden;
-        background: rgba(255, 255, 255, 0.70);
-        border: 1px solid rgba(17, 17, 17, 0.08);
-        border-radius: 16px;
+      width: 100%;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.70);
+      border: 1px solid rgba(17, 17, 17, 0.08);
+      border-radius: 16px;
     }
 
     .detail-row {
-        border-bottom: 1px solid rgba(17, 17, 17, 0.07);
+      border-bottom: 1px solid rgba(17, 17, 17, 0.07);
     }
 
     .detail-row:last-child {
-        border-bottom: 0;
+      border-bottom: 0;
     }
 
     .label {
-        width: 35%;
-        padding: 14px 16px;
-        color: rgb(0, 0, 0);
-        font-size: 12px;
-        font-weight: 700;
-        text-transform: uppercase;
-        vertical-align: top;
+      width: 35%;
+      padding: 14px 16px;
+      color: #000000;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      vertical-align: top;
     }
 
     .value {
-        padding: 14px 16px;
-        color: #111111;
-        font-size: 14px;
-        vertical-align: top;
-        word-break: break-word;
+      padding: 14px 16px;
+      color: #111111;
+      font-size: 14px;
+      vertical-align: top;
+      word-break: break-word;
     }
 
     .ticket-number {
-        color: #991b1b;
-        font-weight: 800;
+      color: #991b1b;
+      font-weight: 800;
+    }
+
+    .button-wrap {
+      padding-top: 24px;
+      text-align: center;
+    }
+
+    .button {
+      display: inline-block;
+      padding: 13px 20px;
+      color: #ffffff;
+      background: #991b1b;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
     }
 
     .note {
-        margin: 24px 0 0;
-        padding: 16px;
-        color: rgba(17, 17, 17, 0.68);
-        font-size: 14px;
-        background: rgba(153, 27, 27, 0.07);
-        border: 1px solid rgba(153, 27, 27, 0.16);
-        border-radius: 14px;
+      margin: 24px 0 0;
+      padding: 16px;
+      color: rgba(17, 17, 17, 0.68);
+      font-size: 14px;
+      background: rgba(153, 27, 27, 0.07);
+      border: 1px solid rgba(153, 27, 27, 0.16);
+      border-radius: 14px;
     }
 
     .footer {
-        padding: 22px 8px 0;
-        color: rgba(17, 17, 17, 0.46);
-        font-size: 12px;
-        text-align: center;
+      padding: 22px 8px 0;
+      color: rgba(17, 17, 17, 0.46);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .footer a {
+      color: #991b1b;
     }
 
     @media screen and (max-width: 520px) {
-        .page {
-            padding: 24px 10px;
-        }
+      .page {
+        padding: 24px 10px;
+      }
 
-        .inner {
-            padding: 24px 18px;
-        }
+      .inner {
+        padding: 24px 18px;
+      }
 
-        h1 {
-            font-size: 25px;
-        }
+      h1 {
+        font-size: 25px;
+      }
 
-        .label,
-        .value {
-            display: block;
-            width: auto;
-            padding: 12px 14px;
-        }
+      .label,
+      .value {
+        display: block;
+        width: auto;
+        padding: 12px 14px;
+      }
 
-        .label {
-            padding-bottom: 2px;
-        }
+      .label {
+        padding-bottom: 2px;
+      }
 
-        .value {
-            padding-top: 2px;
-        }
+      .value {
+        padding-top: 2px;
+      }
     }
-</style>
+  </style>
 </head>
 <body>
-    <table role="presentation" class="page" width="100%" cellpadding="0" cellspacing="0">
-        <tr>
-            <td align="center">
-                <table role="presentation" class="shell" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                    <td class="glass">
-                    <div class="inner">
-                        <div class="brand">Система тикетов</div>
-                        <div class="status-pill">Новый тикет</div>
+  <table role="presentation" class="page" width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center">
+        <table role="presentation" class="shell" width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td class="glass">
+              <div class="inner">
+                <div class="brand">Система тикетов</div>
+                <div class="status-pill">Новый тикет</div>
 
-                        <h1>Тикет создан</h1>
+                <h1>Тикет создан</h1>
 
-                        <p class="lead">
-                        В системе появился новый тикет. Ниже указаны основные детали.
-                        </p>
+                <p class="lead">
+                  В системе появился новый тикет. Ниже указаны основные детали.
+                </p>
 
-                        <table role="presentation" class="details" width="100%" cellpadding="0" cellspacing="0">
-                        <tr class="detail-row">
-                            <td class="label">Номер</td>
-                            <td class="value ticket-number">#{{ ticket_number }}</td>
-                        </tr>
-                        <tr class="detail-row">
-                            <td class="label">Тикет</td>
-                            <td class="value">{{ title }}</td>
-                        </tr>
-                        <tr class="detail-row">
-                            <td class="label">ID</td>
-                            <td class="value">{{ ticket_id }}</td>
-                        </tr>
-                        </table>
-
-                        <div class="note">
-                        Это системное уведомление. Если тикет относится к вашей зоне ответственности, обработайте его в системе.
-                        </div>
-                    </div>
-                    </td>
-                </tr>
-                <tr>
-                    <td class="footer">
-                    С уважением,<br>
-                    Команда {{ app_name | default("ДИО-Консалт") }}<br>
-                    <a href="mailto:{{ support_email | default('diocon.support@mail.ru') }}">{{ support_email | default("diocon.support@mail.ru") }}</a><br><br>
-                    Уведомление сформировано автоматически. Пожалуйста, не отвечайте на это письмо.
-                    </td>
-                </tr>
+                <table role="presentation" class="details" width="100%" cellpadding="0" cellspacing="0">
+                  <tr class="detail-row">
+                    <td class="label">Номер</td>
+                    <td class="value ticket-number">#{{ ticket_number }}</td>
+                  </tr>
+                  <tr class="detail-row">
+                    <td class="label">Тикет</td>
+                    <td class="value">{{ ticket_title | default(title) }}</td>
+                  </tr>
+                  <tr class="detail-row">
+                    <td class="label">ID</td>
+                    <td class="value">{{ ticket_id }}</td>
+                  </tr>
                 </table>
+
+                {% if ticket_url %}
+                <div class="button-wrap">
+                  <a class="button" href="{{ ticket_url }}">Открыть тикет</a>
+                </div>
+                {% endif %}
+
+                <div class="note">
+                  Это системное уведомление. Если тикет относится к вашей зоне ответственности, обработайте его в системе.
+                </div>
+              </div>
             </td>
-        </tr>
-    </table>
+          </tr>
+          <tr>
+            <td class="footer">
+              С уважением,<br>
+              Команда {{ app_name | default("ДИО-Консалт") }}<br>
+              <a href="mailto:{{ support_email | default('diocon.support@mail.ru') }}">{{ support_email | default("diocon.support@mail.ru") }}</a><br><br>
+              Уведомление сформировано автоматически. Пожалуйста, не отвечайте на это письмо.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
