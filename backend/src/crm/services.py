@@ -7,7 +7,13 @@ from .domain.entities import Counterparty
 from .domain.repo import CounterpartyRepository
 from .domain.vo import ContactPerson, Inn, Kpp, Okpo, Phone
 from .mappers import map_counterparty_to_response
-from .schemas import BranchAdd, ContactPersonIn, CounterpartyCreate, CounterpartyResponse
+from .schemas import (
+    BranchAdd,
+    ContactPersonIn,
+    CounterpartyCreate,
+    CounterpartyEdit,
+    CounterpartyResponse,
+)
 
 
 class CounterpartyService:
@@ -61,6 +67,30 @@ class CounterpartyService:
 
         # 5. Запись в базу данных
         await self.repository.create(counterparty)
+        await self.session.commit()
+
+        return map_counterparty_to_response(counterparty)
+
+    async def edit(self, counterparty_id: UUID, data: CounterpartyEdit) -> CounterpartyResponse:
+        """
+        Редактирование информации о контрагенте
+        """
+
+        # 1. Проверка на существование
+        counterparty = await self.repository.read(counterparty_id)
+        if counterparty is None:
+            raise NotFoundError(f"Parent counterparty with ID {counterparty_id} not found")
+
+        # 2. Редактирование и обновление сущности
+        counterparty.edit(
+            name=data.name,
+            legal_name=data.legal_name,
+            okpo=None if data.okpo is None else Okpo(data.okpo),
+            phone=None if data.phone is None else Phone(data.phone),
+            email=data.email,
+            address=data.address,
+        )
+        await self.repository.upsert(counterparty)
         await self.session.commit()
 
         return map_counterparty_to_response(counterparty)
@@ -130,3 +160,20 @@ class CounterpartyService:
         # 2. Привязка продукта
         await self.repository.link_product(counterparty.id, product_id)
         await self.session.commit()
+
+    async def delete_contact_person(
+            self, counterparty_id: UUID, phone: str, email: str
+    ) -> CounterpartyResponse:
+        """Удаление контактного лица контрагента"""
+
+        # 1. Получение и проверка на существование контрагента
+        counterparty = await self.repository.read(counterparty_id)
+        if counterparty is None:
+            raise NotFoundError(f"Counterparty with ID {counterparty_id} not found")
+
+        # 2. Удаление контактного лица и обновление сущности
+        counterparty.remove_contact_person(Phone(phone), email)
+        await self.repository.upsert(counterparty)
+        await self.session.commit()
+
+        return map_counterparty_to_response(counterparty)

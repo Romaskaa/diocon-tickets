@@ -1,6 +1,8 @@
+from typing import override
+
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 
 from ...iam.domain.entities import User
 from ...iam.domain.vo import FullName
@@ -78,6 +80,44 @@ class CounterpartyMapper(ModelMapper[Counterparty, CounterpartyOrm]):
 class SqlCounterpartyRepository(SqlAlchemyRepository[Counterparty, CounterpartyOrm]):
     model = CounterpartyOrm
     model_mapper = CounterpartyMapper
+
+    @override
+    async def paginate(
+            self,
+            params: Pagination,
+            query: str | None = None,
+            email: str | None = None,
+            inn: Inn | None = None,
+    ) -> Page[Counterparty]:
+        # Базовый запрос на получение контрагентов
+        stmt = select(self.model)
+
+        conditions = []
+
+        # Полнотекстовый поиск по наименованиям и ИНН
+        if query is not None and query.strip():
+            query = query.strip()
+
+            # Если в запросе только цифры - поиск по Инн
+            if query.isdigit():
+                conditions.append(self.model.inn.ilike(f"{query}%"))
+            else:
+                pattern = f"%{query}%"
+                conditions.append(
+                    or_(self.model.name.ilike(pattern), self.model.legal_name.ilike(pattern))
+                )
+
+        if email is not None:
+            conditions.append(self.model.email == email)
+
+        if inn is not None:
+            conditions.append(self.model.inn == inn.value)
+
+        # Применение фильтров
+        if conditions:
+            stmt = stmt.where(and_(conditions))
+
+        return await self._paginate(stmt, params)
 
     async def get_by_email(self, email: str) -> Counterparty | None:
         stmt = (

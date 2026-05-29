@@ -2,7 +2,8 @@ from typing import Annotated, Any
 
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Path, status
+from fastapi import APIRouter, Body, Depends, Path, Query, status
+from pydantic import EmailStr
 
 from ..iam.dependencies import get_current_user, require_role
 from ..iam.domain.constants import CUSTOMER_ADMIN_AND_ABOVE, SUPPORT_MANAGER_OR_ABOVE, SUPPORT_TEAM
@@ -13,9 +14,15 @@ from ..products.schemas import ProductResponse
 from ..shared.dependencies import PaginationDep
 from ..shared.domain.exceptions import NotFoundError
 from ..shared.schemas import Page
-from .dependencies import CounterpartyRepoDep, CounterpartyServiceDep
+from .dependencies import CounterpartyFiltersDep, CounterpartyRepoDep, CounterpartyServiceDep
 from .mappers import map_counterparty_to_response
-from .schemas import BranchAdd, ContactPersonIn, CounterpartyCreate, CounterpartyResponse
+from .schemas import (
+    BranchAdd,
+    ContactPersonIn,
+    CounterpartyCreate,
+    CounterpartyEdit,
+    CounterpartyResponse,
+)
 
 router = APIRouter(prefix="/counterparties", tags=["Контрагенты"])
 
@@ -67,6 +74,19 @@ async def add_branch(
     return await service.add_branch(counterparty_id, data)
 
 
+@router.patch(
+    path="/{counterparty_id}",
+    status_code=status.HTTP_200_OK,
+    response_model=CounterpartyResponse,
+    dependencies=[Depends(require_role(*SUPPORT_TEAM))],
+    summary="Отредактировать контрагента",
+)
+async def edit_counterparty(
+        counterparty_id: UUID, data: CounterpartyEdit, service: CounterpartyServiceDep
+) -> CounterpartyResponse:
+    return await service.edit(counterparty_id, data)
+
+
 @router.get(
     path="",
     response_model=Page[CounterpartyResponse],
@@ -75,9 +95,14 @@ async def add_branch(
     summary="Получение списка контрагентов",
 )
 async def get_counterparties(
-        params: PaginationDep, repository: CounterpartyRepoDep
-) -> dict[str, Any]:
-    page = await repository.paginate(params)
+        params: PaginationDep, filters: CounterpartyFiltersDep, repository: CounterpartyRepoDep
+) -> Page[CounterpartyResponse]:
+    page = await repository.paginate(
+        params,
+        query=filters.query,
+        email=filters.email,
+        inn=filters.inn,
+    )
     return page.to_response(map_counterparty_to_response)
 
 
@@ -103,6 +128,22 @@ async def add_contact_person(
         counterparty_id: UUID, data: ContactPersonIn, service: CounterpartyServiceDep
 ) -> CounterpartyResponse:
     return await service.add_contact_person(counterparty_id, data)
+
+
+@router.delete(
+    path="/{counterparty_id}/contact-persons",
+    status_code=status.HTTP_200_OK,
+    response_model=CounterpartyResponse,
+    dependencies=[Depends(require_role(*SUPPORT_MANAGER_OR_ABOVE))],
+    summary="Удаление контактного лица"
+)
+async def delete_contact_person(
+        counterparty_id: UUID,
+        phone: Annotated[str, Query(..., description="Номер телефона")],
+        email: Annotated[EmailStr, Query(..., description="Email адрес")],
+        service: CounterpartyServiceDep,
+) -> CounterpartyResponse:
+    return await service.delete_contact_person(counterparty_id, phone, email)
 
 
 @router.get(

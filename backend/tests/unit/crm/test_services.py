@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 
 from src.crm.domain.vo import CounterpartyType
-from src.crm.schemas import BranchAdd, ContactPersonIn, CounterpartyCreate
+from src.crm.schemas import BranchAdd, ContactPersonIn, CounterpartyCreate, CounterpartyEdit
 from src.crm.services import CounterpartyService
 from src.shared.domain.exceptions import NotFoundError
 
@@ -49,6 +49,11 @@ def counterparty_service(mock_session, fake_counterparty_repo):
     return CounterpartyService(session=mock_session, repository=fake_counterparty_repo)
 
 
+@pytest.fixture
+async def created_counterparty(legal_entity_data, counterparty_service):
+    return await counterparty_service.create(legal_entity_data)
+
+
 # ====================== Тесты для сервисов контрагента ======================
 
 
@@ -59,6 +64,27 @@ async def test_create_counterparty_success(legal_entity_data, fake_counterparty_
     response = await service.create(legal_entity_data)
 
     assert response.id is not None
+
+
+@pytest.mark.asyncio
+async def test_edit_counterparty_success(created_counterparty, counterparty_service):
+    data = CounterpartyEdit(
+        name="Новая компания",
+        legal_name="ООО Новая компания",
+        phone="85003004546"
+    )
+    response = await counterparty_service.edit(created_counterparty.id, data)
+
+    assert response.name == "Новая компания"
+    assert response.legal_name == "ООО Новая компания"
+
+
+@pytest.mark.asyncio
+async def test_edit_failure_when_counterparty_not_found(counterparty_service):
+    data = CounterpartyEdit(name="Новая компания")
+
+    with pytest.raises(NotFoundError):
+        await counterparty_service.edit(uuid4(), data)
 
 
 @pytest.mark.asyncio
@@ -75,7 +101,7 @@ async def test_add_branch_to_exists_counterparty(
 
 @pytest.mark.asyncio
 async def test_add_contact_person_to_exists_counterparty(
-        legal_entity_data, counterparty_service, mock_session
+        legal_entity_data, counterparty_service
 ):
     created_response = await counterparty_service.create(legal_entity_data)
 
@@ -103,3 +129,25 @@ async def test_fails_add_contact_person_to_not_exists_counterparty(counterparty_
 
     with pytest.raises(NotFoundError):
         await counterparty_service.add_contact_person(uuid4(), data)
+
+
+@pytest.mark.asyncio
+async def test_delete_contact_person_success(created_counterparty, counterparty_service):
+    data = ContactPersonIn(
+        first_name="Иван",
+        last_name="Иванов",
+        middle_name="Иванович",
+        phone="88005553535",
+        email="ivanov.ivan@example.com",
+    )
+    response = await counterparty_service.add_contact_person(
+        counterparty_id=created_counterparty.id, data=data
+    )
+
+    assert len(response.contact_persons) == 1 + 1
+
+    response = await counterparty_service.delete_contact_person(
+        counterparty_id=response.id, phone="88005553535", email="ivanov.ivan@example.com"
+    )
+
+    assert len(response.contact_persons) == 1

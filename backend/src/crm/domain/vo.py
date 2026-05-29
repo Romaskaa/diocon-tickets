@@ -1,4 +1,4 @@
-from typing import ClassVar, Self
+from typing import ClassVar
 
 import re
 from dataclasses import dataclass, field
@@ -232,7 +232,7 @@ class ContactPerson(ValueObject):
             phone: str,
             email: str,
             messengers: dict[str, str],
-    ) -> Self:
+    ) -> "ContactPerson":
         return cls(
             full_name=FullName(
                 f"{last_name} {first_name} {middle_name if middle_name is not None else ''}"

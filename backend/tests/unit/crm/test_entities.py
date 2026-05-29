@@ -78,6 +78,57 @@ def test_create_individual_entrepreneur_success(valid_inn_ip, valid_phone):
     assert counterparty.is_branch is False
 
 
+# ====================== Редактирование контрагента ======================
+
+def test_edit_counterparty_success(valid_inn_legal, valid_kpp, valid_phone):
+    counterparty = Counterparty(
+        counterparty_type=CounterpartyType.LEGAL_ENTITY,
+        name="ООО Ромашка",
+        legal_name="Общество с ограниченной ответственностью «Ромашка»",
+        inn=valid_inn_legal,
+        kpp=valid_kpp,
+        phone=valid_phone,
+        email="info@romashka.ru",
+    )
+    old_updated_at = counterparty.updated_at
+
+    counterparty.edit(
+        name="  ООО Альбатрос ",
+        legal_name=" Общество с ограниченной ответственностью «Альбатрос»   ",
+        phone=Phone("88005553535"),
+        email="zastrahui@albatros.ru",
+        address="ул. Ленина д. 10",
+    )
+
+    assert counterparty.name == "ООО Альбатрос"
+    assert counterparty.legal_name == "Общество с ограниченной ответственностью «Альбатрос»"
+    assert counterparty.phone == Phone("88005553535")
+    assert counterparty.email == "zastrahui@albatros.ru"
+    assert counterparty.address == "ул. Ленина д. 10"
+
+    assert counterparty.updated_at > old_updated_at
+
+
+def test_edit_same_data_do_nothing(valid_inn_legal, valid_kpp, valid_phone):
+    counterparty = Counterparty(
+        counterparty_type=CounterpartyType.LEGAL_ENTITY,
+        name="ООО Ромашка",
+        legal_name="Общество с ограниченной ответственностью «Ромашка»",
+        inn=valid_inn_legal,
+        kpp=valid_kpp,
+        phone=valid_phone,
+        email="info@romashka.ru",
+    )
+    old_updated_at = counterparty.updated_at
+
+    counterparty.edit(name="  ООО Ромашка ", legal_name="            ")
+
+    assert counterparty.name == "ООО Ромашка"
+    assert counterparty.legal_name == "Общество с ограниченной ответственностью «Ромашка»"
+
+    assert counterparty.updated_at == old_updated_at
+
+
 # ====================== Создание филиала через фабричный метод ======================
 
 def test_create_branch(valid_inn_legal, valid_kpp, valid_phone):
@@ -197,6 +248,37 @@ def test_branch_without_parent_id_raises_error(valid_inn_legal, valid_kpp, valid
         )
 
 
+def test_non_unique_contact_data_raises_error(valid_inn_legal, valid_kpp, valid_phone):
+    with pytest.raises(InvariantViolationError, match="phone number and email must be unique"):
+        Counterparty(
+            counterparty_type=CounterpartyType.LEGAL_ENTITY,
+            name="Филиал",
+            legal_name="Филиал в СПб",
+            inn=valid_inn_legal,
+            kpp=valid_kpp,
+            phone=valid_phone,
+            email="branch@example.com",
+            contact_persons=[
+                ContactPerson.create(
+                    first_name="Иван",
+                    last_name="Иванов",
+                    middle_name=None,
+                    phone="8 800 555 3535",
+                    email="kakoy.to.eben@main.com",
+                    messengers={},
+                ),
+                ContactPerson.create(
+                    first_name="Олег",
+                    last_name="Олегов",
+                    middle_name=None,
+                    phone="+78005553535",
+                    email="kakoy.to.eben@main.com",
+                    messengers={},
+                ),
+            ],
+        )
+
+
 # ====================== Свойства ======================
 
 def test_is_head_and_is_branch_properties():
@@ -228,6 +310,8 @@ def test_is_head_and_is_branch_properties():
     assert branch.is_branch is True
 
 
+# ====================== Добавление контактного лица ======================
+
 def test_add_contact_person_success():
     counterparty = Counterparty(
         counterparty_type=CounterpartyType.LEGAL_ENTITY,
@@ -250,3 +334,72 @@ def test_add_contact_person_success():
     assert counterparty.contact_persons != []
     assert counterparty.contact_persons[0].full_name.value == "Иванов Иван Иванович"
     assert counterparty.updated_at > counterparty.created_at
+
+
+def test_add_already_exists_contact_person_failed():
+    counterparty = Counterparty(
+        counterparty_type=CounterpartyType.LEGAL_ENTITY,
+        name="Головная компания",
+        legal_name="Головная компания",
+        inn=Inn("7707083893"),
+        kpp=Kpp("773301001"),
+        phone=Phone("+79991234567"),
+        email="head@company.ru",
+    )
+    counterparty.add_contact_person(
+        first_name="Иван",
+        last_name="Иванов",
+        middle_name="Иванович",
+        phone="88005553535",
+        email="ivanov.ivan@mail.ru",
+        messengers={"vk": "12345"},
+    )
+
+    with pytest.raises(ValueError, match="already exists"):
+        counterparty.add_contact_person(
+            first_name="Иван",
+            last_name="Иванов",
+            middle_name="Иванович",
+            phone="88005553535",
+            email="ivanov.ivan@mail.ru",
+            messengers={"vk": "12345", "telegram": "someUser"},
+        )
+
+
+# ====================== Удаление контактного лица ======================
+
+def test_remove_contact_person_success():
+    counterparty = Counterparty(
+        counterparty_type=CounterpartyType.LEGAL_ENTITY,
+        name="Головная компания",
+        legal_name="Головная компания",
+        inn=Inn("7707083893"),
+        kpp=Kpp("773301001"),
+        phone=Phone("+79991234567"),
+        email="head@company.ru",
+    )
+    counterparty.add_contact_person(
+        first_name="Иван",
+        last_name="Иванов",
+        middle_name="Иванович",
+        phone="88005553535",
+        email="ivanov.ivan@mail.ru",
+        messengers={"vk": "12345"},
+    )
+    counterparty.add_contact_person(
+        first_name="Пётр",
+        last_name="Петрович",
+        middle_name=None,
+        phone="87775553322",
+        email="petr.petrovich@main.com",
+        messengers={},
+    )
+
+    assert len(counterparty.contact_persons) == 1 + 1
+
+    counterparty.remove_contact_person(Phone("87775553322"), "petr.petrovich@main.com")
+
+    assert len(counterparty.contact_persons) == 1
+    assert Phone("87775553322") not in [
+        contact_person.phone for contact_person in counterparty.contact_persons
+    ]

@@ -62,8 +62,8 @@ async def engine(postgres_container):
         url=postgres_container.get_connection_url(), echo=True, pool_pre_ping=True
     )
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm;"))
+        await conn.run_sync(Base.metadata.create_all)
     yield engine
     await engine.dispose()
 

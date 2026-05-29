@@ -1,3 +1,5 @@
+from typing import override
+
 from uuid import UUID
 
 from ...iam.domain.entities import User
@@ -9,6 +11,18 @@ from .vo import Inn
 
 
 class CounterpartyRepository(Repository[Counterparty]):
+
+    @override
+    async def paginate(
+            self,
+            params: Pagination,
+            query: str | None = None,
+            email: str | None = None,
+            inn: Inn | None = None,
+    ) -> Page[Counterparty]:
+        """
+        Поиск контрагентов по различным параметрам
+        """
 
     async def get_by_email(self, email: str) -> Counterparty | None:
         """Поиск по email адресу компании (почта уникальна)"""

@@ -14,15 +14,11 @@ from .domain.exceptions import RateLimitExceededError
 from .infra.events import FastStreamEventPublisher
 from .infra.mail import SmtpMailSender
 from .infra.rate_limiter import IdentifierFunc, RateLimiter, ip_identifier
-from .infra.spell_checker import LanguageToolSpellChecker, SpellChecker
+from .infra.spellchecking import LanguageToolSpellChecker, SpellChecker
 from .infra.sse import SSEManager
 from .schemas import Pagination
 
 sse_manager = SSEManager()
-
-spell_checker = LanguageToolSpellChecker(
-    language=settings.language_tool.language, remote_server=settings.language_tool.url
-)
 
 SessionDep = Annotated[AsyncSession, Depends(get_db)]
 
@@ -60,7 +56,9 @@ EventPublisherDep = Annotated[EventPublisher, Depends(get_event_publisher)]
 
 
 def get_spell_checker() -> SpellChecker:
-    return spell_checker
+    return LanguageToolSpellChecker(
+        language=settings.language_tool.language, remote_server=settings.language_tool.url
+    )
 
 
 SpellCheckerDep = Annotated[SpellChecker, Depends(get_spell_checker)]

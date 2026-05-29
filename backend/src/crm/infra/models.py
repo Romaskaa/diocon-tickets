@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 from uuid import UUID
 
-from sqlalchemy import Enum, ForeignKey
+from sqlalchemy import Enum, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -43,6 +43,24 @@ class CounterpartyOrm(Base):
     customers: Mapped[list["UserOrm"]] = relationship(back_populates="counterparty")
     products: Mapped[list["CounterpartyProductOrm"]] = relationship(
         back_populates="counterparty"
+    )
+
+    __table_args__ = (
+        # B-Tree индекс для быстрого поиска по Инн (по префиксу или постфиксу)
+        Index("ix_counterparties_inn_btree", "inn"),
+        # Полнотекстовый поиск по наименованиям
+        Index(
+            "ix_counterparties_name_trgm",
+            "name",
+            postgresql_using="gin",
+            postgresql_ops={"name": "gin_trgm_ops"},
+        ),
+        Index(
+            "ix_counterparties_legal_name_trgm",
+            "legal_name",
+            postgresql_using="gin",
+            postgresql_ops={"legal_name": "gin_trgm_ops"},
+        ),
     )
 
 

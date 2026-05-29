@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Body, status
 
 from .dependencies import SpellCheckerDep
-from .infra.spell_checker import TextCheckResult
+from .infra.spellchecking import TextCheckResult
 
 router = APIRouter(tags=["Общие утилиты"])
 
