@@ -1,7 +1,9 @@
+from dataclasses import dataclass
 from uuid import UUID
 
 from ...iam.domain.services import PermissionResult
 from ...iam.domain.vo import UserRole
+from ...projects.domain.repos import MembershipRepository
 from .constants import NON_COMMENTABLE_STATUSES
 from .entities import Ticket
 from .vo import TicketStatus
@@ -193,4 +195,60 @@ def can_comment_ticket(
     return PermissionResult(True)
 
 
-def can_view_tickets(): ...
+@dataclass(frozen=True)
+class TicketScopes:
+    """
+    Область видимости тикета - определяет к каким тикетам есть доступ.
+    Области видимости:
+     - Инициатор
+     - Контрагент
+     - Проекты
+    """
+
+    reporter_id: UUID | None = None
+    counterparty_id: UUID | None = None
+    project_ids: list[UUID] | None = None
+
+    def is_unrestricted(self) -> bool:
+        """Неограничен ли доступ"""
+
+        return all(
+            scope is None for scope in (self.reporter_id, self.counterparty_id, self.project_ids)
+        )
+
+
+class TicketScopeService:
+    """
+    Сервис для определения области видимости тикетов
+    """
+
+    def __init__(
+            self, project_membership_repo: MembershipRepository
+    ) -> None:
+        self.project_membership_repo = project_membership_repo
+
+    async def get_scopes(
+            self, user_id: UUID, user_role: UserRole, user_counterparty_id: UUID | None = None
+    ) -> TicketScopes | None:
+        # Админ может видеть все тикеты в системе
+        if user_role == UserRole.ADMIN:
+            return TicketScopes()
+
+        # Получение доступных проектов пользователя
+        memberships = await self.project_membership_repo.get_by_user(user_id)
+        project_ids = [membership.project_id for membership in memberships]
+
+        match user_role:
+            case (
+                UserRole.CUSTOMER |
+                UserRole.DEVELOPER |
+                UserRole.ACCOUNT_MANAGER |
+                UserRole.FINANCE
+            ):
+                return TicketScopes(reporter_id=user_id)
+            case UserRole.CUSTOMER_ADMIN:
+                return TicketScopes(counterparty_id=user_counterparty_id, project_ids=project_ids)
+            case UserRole.SUPPORT_AGENT | UserRole.SUPPORT_MANAGER:
+                return TicketScopes(project_ids=project_ids)
+            case _:
+                return None  # нельзя просматривать тикеты

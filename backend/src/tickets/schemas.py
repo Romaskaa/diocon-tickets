@@ -108,6 +108,36 @@ class TicketPreview(BaseModel):
     priority: Priority = Field(..., description="Приоритет")
 
 
+class TicketViewResponse(BaseModel):
+    """
+    Облегчённая модель данных для представления тикета
+    """
+
+    id: UUID = Field(..., description="Уникальный ID тикета")
+    created_at: datetime = Field(..., description="Дата создания")
+    updated_at: datetime = Field(..., description="Дата обновления")
+
+    reporter_full_name: str = Field(
+        ..., description="ФИО инициатора", examples=["Иванов Иван Иванович"]
+    )
+    assignee_full_name: str | None = Field(
+        None, description="ФИО исполнителя", examples=["Петров Пётр Петрович"]
+    )
+
+    counterparty_name: str | None = Field(
+        None, description="Контрагент, которому принадлежит заявка", examples=["ООО Ромашка"]
+    )
+    project_key: str | None = Field(
+        None, description="Проект, которому принадлежит заявка", examples=["ROMASHKA"]
+    )
+
+    number: str = Field(..., description="Номер тикета", examples=["РОМ-26-00012456"])
+    title: str = Field(..., description="Заголовок тикета")
+    type: TicketType = Field(..., description="Тип заявки")
+    status: TicketStatus = Field(..., description="Текущий статус")
+    priority: Priority = Field(..., description="Приоритет")
+
+
 class TicketResponse(TicketBase):
     """API схема ответа тикета"""
 
@@ -155,25 +185,6 @@ class TicketCreate(TicketBase):
         Priority.MEDIUM,
         description="Приоритет выполнения (чем выше приоритет, тем быстрее время реакции)"
     )
-
-
-class TicketFilter(BaseModel):
-    """Параметры для фильтрации тикетов"""
-
-    # Базовые фильтры
-    reporter_id: UUID | None = Field(None, description="По инициатору")
-    creator_id: UUID | None = Field(None, description="По создателю")
-    project_id: UUID | None = Field(None, description="По проекту")
-    counterparty_id: UUID | None = Field(None, description="По контрагенту")
-    status: TicketStatus | None = Field(None, description="По статусу")
-    priority: Priority | None = Field(None, description="По приоритету")
-
-    # Дополнительные фильтры
-    tags: list[str] | None = Field(None, description="По тегам")
-    search: str | None = Field(None, description="Полнотекстовый поиск")
-    assigned_to: UUID | None = Field(None, description="По исполнителю, которому назначили тикет")
-    created_after: datetime | None = Field(None, description="Создан после")
-    created_before: datetime | None = Field(None, description="Создан до")
 
 
 class TicketAssign(BaseModel):

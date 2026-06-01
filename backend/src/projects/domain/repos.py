@@ -42,3 +42,10 @@ class MembershipRepository(Repository[Membership]):
 
     async def find(self, project_id: UUID, user_id: UUID) -> Membership | None:
         """Поиск участника внутри проекта по уникальной комбинации"""
+
+    async def get_by_user(self, user_id: UUID) -> list[Membership]:
+        """
+        Возвращает все членства пользователя во всех проектах.
+        Используется для получения полного списка проектов пользователя
+        (например, для построения селектора проектов или персональной панели).
+        """

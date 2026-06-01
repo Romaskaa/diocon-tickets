@@ -18,7 +18,8 @@ from src.shared.utils.time import current_datetime
 from src.tasks.domain.entities import Task
 from src.tasks.domain.vo import TaskNumber
 from src.tickets.domain.entities import Comment, Reaction, Ticket
-from src.tickets.domain.repos import ReactionStats
+from src.tickets.domain.repos import ReactionStats, TicketFilters
+from src.tickets.domain.services import TicketScopes
 from src.tickets.domain.vo import CommentType, ReactionType
 
 
@@ -151,6 +152,13 @@ class InMemoryMembershipRepository(InMemoryRepository[Membership]):
 
         return None
 
+    async def get_by_user(self, user_id: UUID) -> list[Membership]:
+        return [
+            membership
+            for membership in self.data.values()
+            if membership.user_id == user_id
+        ]
+
 
 class InMemoryProjectRepository(InMemoryRepository[Project]):
 
@@ -182,6 +190,39 @@ class InMemoryProjectRepository(InMemoryRepository[Project]):
 
 
 class InMemoryTicketRepository(InMemoryRepository[Ticket]):
+
+    @override
+    async def paginate(
+            self,
+            pagination: Pagination,
+            scopes: TicketScopes | None = None,
+            filters: TicketFilters | None = None,
+    ) -> Page[Ticket]:
+        tickets = [ticket for ticket in self.data.values() if not ticket.is_deleted]
+
+        # Ограничение по области видимости
+        if scopes is not None:
+            if scopes.reporter_id is not None:
+                tickets = [
+                    ticket for ticket in tickets if ticket.reporter_id == scopes.reporter_id
+                ]
+            elif scopes.counterparty_id is not None:
+                tickets = [
+                    ticket
+                    for ticket in tickets
+                    if ticket.counterparty_id == scopes.counterparty_id
+                    or (ticket.project_id is not None and ticket.project_id in scopes.project_ids)
+                ]
+            elif scopes.project_ids is not None:
+                tickets = [
+                    ticket
+                    for ticket in tickets
+                    if ticket.project_id is None or ticket.project_id in scopes.project_ids
+                ]
+
+        tickets.sort(key=lambda x: x.created_at)
+
+        return Page.create(tickets, len(tickets), pagination.page, pagination.size)
 
     async def get_total(
             self, project_id: UUID | None = None, counterparty_id: UUID | None = None

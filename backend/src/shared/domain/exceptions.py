@@ -22,6 +22,12 @@ class AppError(Exception):
         super().__init__(self.message)
 
 
+class DatabaseError(AppError):
+    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    error_code = "DATABASE_ERROR"
+    public_message = "Ошибка сервера базы данных"
+
+
 class NotFoundError(AppError):
     status_code = status.HTTP_404_NOT_FOUND
     error_code = "RESOURCE_NOT_FOUND"

@@ -1,20 +1,27 @@
 from typing import Annotated
 
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import Depends, Query
 
+from ..core.database import session_factory
 from ..crm.dependencies import CounterpartyRepoDep
-from ..iam.dependencies import CurrentUserDep, UserRepoDep
-from ..iam.domain.exceptions import PermissionDeniedError
-from ..iam.domain.vo import UserRole
-from ..projects.dependencies import ProjectAccessServiceDep, ProjectRepoDep
+from ..crm.domain.entities import Counterparty
+from ..crm.infra.repos import SqlCounterpartyRepository
+from ..iam.dependencies import UserRepoDep
+from ..iam.domain.entities import User
+from ..iam.infra.repos import SqlUserRepository
+from ..projects.dependencies import MembershipRepoDep, ProjectAccessServiceDep, ProjectRepoDep
+from ..projects.domain.entities import Project
+from ..projects.infra.repos import SqlProjectRepository
 from ..shared.dependencies import EventPublisherDep, SessionDep
-from .domain.repos import CommentRepository, ReactionRepository, TicketRepository
-from .domain.vo import Priority, TicketStatus
+from .domain.repos import CommentRepository, ReactionRepository, TicketFilters, TicketRepository
+from .domain.services import TicketScopeService
+from .domain.vo import Priority, TicketStatus, TicketType
 from .infra.repos import SqlCommentRepository, SqlReactionRepository, SqlTicketRepository
-from .schemas import TicketFilter
-from .services import CommentService, ReactionService, TicketService
+from .loaders import TicketDataLoader
+from .services import CommentService, ReactionService, TicketService, TicketViewService
 
 
 def get_ticket_repo(session: SessionDep) -> SqlTicketRepository:
@@ -54,6 +61,49 @@ def get_ticket_service(
     )
 
 
+# Функции для пакетной загрузки данных
+async def fetch_users(user_ids: list[UUID]) -> list[User]:
+    async with session_factory() as session:
+        user_repo = SqlUserRepository(session)
+        return await user_repo.get_by_ids(user_ids)
+
+
+async def fetch_counterparties(counterparty_ids: list[UUID]) -> list[Counterparty]:
+    async with session_factory() as session:
+        counterparty_repo = SqlCounterpartyRepository(session)
+        return await counterparty_repo.get_by_ids(counterparty_ids)
+
+
+async def fetch_projects(project_ids: list[UUID]) -> list[Project]:
+    async with session_factory() as session:
+        project_repo = SqlProjectRepository(session)
+        return await project_repo.get_by_ids(project_ids)
+
+
+def get_ticket_data_loader() -> TicketDataLoader:
+    return TicketDataLoader(
+        users_fetcher=fetch_users,
+        counterparties_fetcher=fetch_counterparties,
+        projects_fetcher=fetch_projects,
+    )
+
+
+def get_ticket_scope_service(membership_repo: MembershipRepoDep) -> TicketScopeService:
+    return TicketScopeService(project_membership_repo=membership_repo)
+
+
+def get_ticket_view_service(
+        ticket_repo: TicketRepoDep,
+        ticket_scope_service: TicketScopeService = Depends(get_ticket_scope_service),
+        ticket_data_loader: TicketDataLoader = Depends(get_ticket_data_loader)
+) -> TicketViewService:
+    return TicketViewService(
+        ticket_repo=ticket_repo,
+        ticket_scope_service=ticket_scope_service,
+        ticket_data_loader=ticket_data_loader,
+    )
+
+
 def get_comment_service(
         session: SessionDep,
         ticket_repo: TicketRepoDep,
@@ -85,74 +135,41 @@ def get_reaction_service(
 
 
 TicketServiceDep = Annotated[TicketService, Depends(get_ticket_service)]
+TicketViewServiceDep = Annotated[TicketViewService, Depends(get_ticket_view_service)]
 CommentServiceDep = Annotated[CommentService, Depends(get_comment_service)]
 ReactionServiceDep = Annotated[ReactionService, Depends(get_reaction_service)]
 
 
 def get_ticket_filters(
-        current_user: CurrentUserDep,
-        # Базовые фильтры
-        reporter_id: Annotated[
-            UUID | None, Query(..., description="По инициатору")
-        ] = None,
-        created_by: Annotated[
-            UUID | None, Query(..., description="По фактическому создателю")
-        ] = None,
-        project_id: Annotated[
-            UUID | None, Query(..., description="По проекту")
-        ] = None,
-        counterparty_id: Annotated[
-            UUID | None, Query(..., description="По контрагенту")
-        ] = None,
         status: Annotated[
-            TicketStatus | None,
-            Query(..., description="По статусу")
+            TicketStatus | None, Query(..., description="По статусу")
         ] = None,
         priority: Annotated[
-            Priority | None,
-            Query(..., description="По приоритету")
+            Priority | None, Query(..., description="По приоритету")
         ] = None,
-        # Дополнительные фильтры
-        assigned_to: Annotated[
-            UUID | None, Query(..., description="По исполнителю")
+        ticket_type: Annotated[
+            TicketType | None, Query(..., description="По виду заявки")
         ] = None,
         tags: Annotated[
-            list[str] | None, Query(..., description="По тегам")
+            list[str] | None, Query(..., max_length=10, description="По тегам")
         ] = None,
-        search: Annotated[
-            str | None, Query(..., description="Запрос для полнотекстового поиска")
+        query: Annotated[str | None, Query(..., description="Поисковый запрос")] = None,
+        created_after: Annotated[
+            datetime | None, Query(..., description="Создан после")
         ] = None,
-) -> TicketFilter:
-    """Зависимость для фильтрации тикетов в зависимости от роли пользователя"""
-
-    # 1. Клиент может видеть только свои тикеты
-    if current_user.role == UserRole.CUSTOMER:
-        if reporter_id is not None and reporter_id != current_user.user_id:
-            raise PermissionDeniedError("Customers can only see their tickets")
-
-        reporter_id = current_user.user_id
-        counterparty_id = None
-
-    # 2. Администратор заказчика может видеть все тикеты своего контрагента
-    elif current_user.role == UserRole.CUSTOMER_ADMIN:
-        if counterparty_id is not None and counterparty_id != current_user.counterparty_id:
-            raise PermissionDeniedError(
-                "Customer admin can only see tickets belonging to its counterparty"
-            )
-
-        counterparty_id = current_user.counterparty_id
-
-    return TicketFilter(
-        reporter_id=reporter_id,
-        created_by=created_by,
-        project_id=project_id,
-        counterparty_id=counterparty_id,
+        created_before: Annotated[
+            datetime | None, Query(..., description="Создан до")
+        ] = None,
+) -> TicketFilters:
+    return TicketFilters(
         status=status,
         priority=priority,
-        assigned_to=assigned_to,
+        type=ticket_type,
         tags=tags,
-        search=search,
+        query=query,
+        created_after=created_after,
+        created_before=created_before,
     )
 
 
-TicketFiltersDep = Annotated[TicketFilter, Depends(get_ticket_filters)]
+TicketFiltersDep = Annotated[TicketFilters, Depends(get_ticket_filters)]

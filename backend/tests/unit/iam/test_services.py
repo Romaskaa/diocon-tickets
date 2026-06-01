@@ -109,7 +109,7 @@ def make_support():
     return create_support(
         email=fake.email(),
         password_hash=generate_password_hash(),
-        full_name=fake.name(),
+        full_name="Иванов Иван Иванович",
         user_role=UserRole.SUPPORT_MANAGER,
     )
 

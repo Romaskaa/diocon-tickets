@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.database import Base
 from ..domain.entities import Entity
-from ..domain.exceptions import NotFoundError
 from ..schemas import Page, Pagination
 from ..utils.time import current_datetime
 
@@ -111,6 +110,11 @@ class SqlAlchemyRepository[EntityT: Entity, ModelT: Base]:
         stmt = select(exists()).where(self.model.id == uid)
         return await self.session.scalar(stmt)
 
+    async def get_by_ids(self, ids: list[UUID]) -> list[EntityT]:
+        stmt = select(self.model).where(self.model.id.in_(ids))
+        results = await self.session.execute(stmt)
+        return [self.model_mapper.to_entity(model) for model in results.scalars().all()]
+
 
 class InMemoryRepository[EntityT: Entity]:
     def __init__(self) -> None:
@@ -158,3 +162,6 @@ class InMemoryRepository[EntityT: Entity]:
 
     async def exists(self, uid: UUID) -> bool:
         return uid in self.data
+
+    async def get_by_ids(self, ids: list[UUID]) -> list[EntityT]:
+        return [entity for entity in self.data.values() if entity.id in ids]
