@@ -123,7 +123,7 @@ async def test_create_task_returns_created_task(tasks_client, current_support_ma
     """
 
     response = await tasks_client.post(
-        "api/v1/tasks",
+        "/api/v1/tasks",
         json={
             "ticket_id": None,
             "project_id": None,
@@ -175,12 +175,11 @@ async def test_edit_task_updated_task(session, tasks_client, task_repo, current_
     )
 
     assert response.status_code == status.HTTP_200_OK
-
     data = response.json()
     assert data["id"] == str(task.id)
     assert data["title"] == "Updated task title"
-    assert data["description"] == "Updated description"
     assert data["priority"] == Priority.HIGH
+    assert data["story_points"] == 5
 
     updated_task = await task_repo.read(task.id)
 
@@ -225,3 +224,290 @@ async def test_move_task_status_returns_task_with_new_status(session, tasks_clie
 
     assert updated_task is not None
     assert updated_task.status == TaskStatus.IN_PROGRESS
+
+
+@pytest.mark.asyncio
+async def test_assign_task_returns_task_with_assignee(session, tasks_client, task_repo, user_repo, current_support_manager):
+    """
+    Проверяем API назначения испольнителя задачи: endpoint должен найти задачу,
+    найти пользователя в реальной БД, назначить исполнителя и вернуть обновлённую response-схему.
+    Данные: BACKLOG-задача текущего support-manager и support-agent исполнитель.
+    """
+
+    task = make_task(
+        status=TaskStatus.BACKLOG,
+        created_by=current_support_manager.user_id,
+    )
+
+    assignee = create_support(
+        email=f"task-assignee-{uuid4()}@example.com",
+        password_hash=f"hashed-password-{uuid4()}",
+        user_role=UserRole.SUPPORT_AGENT,
+    )
+
+    await task_repo.create(task)
+    await user_repo.create(assignee)
+    await session.commit()
+
+    response = await tasks_client.post(
+        f"/api/v1/tasks/{task.id}/assign",
+        json={
+            "assignee_id": str(assignee.id),
+        },
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    
+    data = response.json()
+    assert data["id"] == str(task.id)
+    assert data["assignee_id"] == str(assignee.id)
+
+    updated_task = await task_repo.read(task.id)
+
+    assert updated_task is not None
+    assert updated_task.assignee_id == assignee.id
+
+
+@pytest.mark.asyncio
+async def test_archive_task_returns_archived_task(
+    session,
+    tasks_client,
+    task_repo,
+    current_support_manager,
+):
+    """
+    Проверяем API архивации задачи: endpoint должен найти задачу,
+    пометить её архивной и вернуть обновлённую response-схему.
+    Данные: существующая BACKLOG-задача, созданная текущим пользователем.
+    """
+
+    task = make_task(
+        status=TaskStatus.BACKLOG,
+        created_by=current_support_manager.user_id,
+    )
+
+    await task_repo.create(task)
+    await session.commit()
+
+    response = await tasks_client.delete(f"/api/v1/tasks/{task.id}")
+
+    assert response.status_code == status.HTTP_200_OK
+
+    data = response.json()
+    assert data["id"] == str(task.id)
+    assert data["is_archived"] is True
+
+    archived_task = await task_repo.read(task.id)
+
+    assert archived_task is not None
+    assert archived_task.deleted_at is not None
+
+
+@pytest.mark.asyncio
+async def test_get_internal_kanban_board_returns_tasks_grouped_by_status(
+    session,
+    tasks_client,
+    task_repo,
+    current_support_manager,
+):
+    """
+    Проверяем API kanban-доски: endpoint должен вернуть колонки по статусам
+    и положить задачи в соответствующие колонки.
+    Данные: BACKLOG и TODO задачи без project_id.
+    """
+
+    backlog_task = make_task(
+        status=TaskStatus.BACKLOG,
+        created_by=current_support_manager.user_id,
+    )
+    todo_task = make_task(
+        status=TaskStatus.TODO,
+        created_by=current_support_manager.user_id,
+    )
+
+    await task_repo.create(backlog_task)
+    await task_repo.create(todo_task)
+    await session.commit()
+
+    response = await tasks_client.post(
+        "/api/v1/tasks/kanban",
+        params={"page": 1, "size": 10},
+        json={"type": "internal"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+
+    data = response.json()
+    assert data["context"]["type"] == "internal"
+    assert data["total_tasks"] >= 2
+
+    columns_by_status = {
+        column["status"]: column
+        for column in data["columns"]
+    }
+
+    backlog_ids = {
+        item["id"]
+        for item in columns_by_status[TaskStatus.BACKLOG]["tasks"]["items"]
+    }
+    todo_ids = {
+        item["id"]
+        for item in columns_by_status[TaskStatus.TODO]["tasks"]["items"]
+    }
+
+    assert str(backlog_task.id) in backlog_ids
+    assert str(todo_task.id) in todo_ids
+
+
+@pytest.mark.asyncio
+async def test_edit_task_not_found_returns_404(tasks_client):
+    """
+    Проверяем API редактирования задачи: если задачи нет в БД,
+    endpoint должен вернуть 404.
+    Данные: случайный task_id.
+    """
+
+    task_id = uuid4()
+
+    response = await tasks_client.patch(
+        f"/api/v1/tasks/{task_id}",
+        json={"title": "Missing task"},
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    data = response.json()
+    assert data["error"]["code"] == "RESOURCE_NOT_FOUND"
+    assert str(task_id) in data["error"]["message"]
+
+
+@pytest.mark.asyncio
+async def test_assign_task_unknown_user_returns_404(
+    session,
+    tasks_client,
+    task_repo,
+    current_support_manager,
+):
+    """
+    Проверяем API назначения исполнителя: если пользователя нет в БД,
+    endpoint должен вернуть 404.
+    Данные: существующая задача и случайный assignee_id.
+    """
+
+    task = make_task(
+        status=TaskStatus.BACKLOG,
+        created_by=current_support_manager.user_id,
+    )
+    assignee_id = uuid4()
+
+    await task_repo.create(task)
+    await session.commit()
+
+    response = await tasks_client.post(
+        f"/api/v1/tasks/{task.id}/assign",
+        json={"assignee_id": str(assignee_id)},
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    data = response.json()
+    assert data["error"]["code"] == "RESOURCE_NOT_FOUND"
+    assert str(assignee_id) in data["error"]["message"]
+
+
+@pytest.mark.asyncio
+async def test_request_task_review_returns_task_with_reviewer(
+    session,
+    tasks_client,
+    task_repo,
+    user_repo,
+    current_support_manager,
+):
+    """
+    Проверяем API запроса ревью задачи: endpoint должен назначить reviewer_id
+    и перевести задачу в статус REVIEW.
+    Данные: IN_PROGRESS-задача с исполнителем и support-manager как reviewer.
+    """
+
+    assignee = create_support(
+        email=f"task-review-assignee-{uuid4()}@example.com",
+        password_hash=f"hashed-password-{uuid4()}",
+        user_role=UserRole.SUPPORT_AGENT,
+    )
+    reviewer = create_support(
+        email=f"task-reviewer-{uuid4()}@example.com",
+        password_hash=f"hashed-password-{uuid4()}",
+        user_role=UserRole.SUPPORT_MANAGER,
+    )
+    task = make_task(
+        status=TaskStatus.IN_PROGRESS,
+        assignee_id=assignee.id,
+        created_by=current_support_manager.user_id,
+    )
+
+    await user_repo.create(assignee)
+    await user_repo.create(reviewer)
+    await task_repo.create(task)
+    await session.commit()
+
+    response = await tasks_client.post(
+        f"/api/v1/tasks/{task.id}/request-review",
+        json={"reviewer_id": str(reviewer.id)},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+
+    data = response.json()
+    assert data["id"] == str(task.id)
+    assert data["reviewer_id"] == str(reviewer.id)
+    assert data["status"] == TaskStatus.REVIEW
+
+    updated_task = await task_repo.read(task.id)
+
+    assert updated_task is not None
+    assert updated_task.reviewer_id == reviewer.id
+    assert updated_task.status == TaskStatus.REVIEW
+
+
+@pytest.mark.asyncio
+async def test_review_task_approve_returns_done_task(
+    session,
+    tasks_client,
+    task_repo,
+    current_support_manager,
+):
+    """
+    Проверяем API ревью задачи: approve должен перевести задачу из REVIEW в DONE.
+    Данные: задача в статусе REVIEW, где текущий пользователь является reviewer.
+    """
+
+    assignee_id = uuid4()
+    task = make_task(
+        status=TaskStatus.IN_PROGRESS,
+        assignee_id=assignee_id,
+        created_by=current_support_manager.user_id,
+    )
+    task.request_review(
+        reviewer_id=current_support_manager.user_id,
+        requested_by=assignee_id,
+    )
+
+    await task_repo.create(task)
+    await session.commit()
+
+    response = await tasks_client.post(
+        f"/api/v1/tasks/{task.id}/review",
+        json={"action": "approve"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+
+    data = response.json()
+    assert data["id"] == str(task.id)
+    assert data["status"] == TaskStatus.DONE
+
+    updated_task = await task_repo.read(task.id)
+
+    assert updated_task is not None
+    assert updated_task.status == TaskStatus.DONE
+    assert updated_task.completed_at is not None

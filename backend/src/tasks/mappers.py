@@ -17,6 +17,7 @@ def map_task_to_response(task: Task) -> TaskResponse:
         title=task.title,
         description=task.description,
         priority=task.priority,
+        story_points=None if task.story_points is None else task.story_points.value,
         status=task.status,
         assignee_id=task.assignee_id,
         reviewer_id=task.reviewer_id,
