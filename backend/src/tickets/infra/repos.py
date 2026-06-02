@@ -70,7 +70,7 @@ class SqlTicketRepository(SqlAlchemyRepository[Ticket, TicketOrm]):
             filters: TicketFilters | None = None,
     ) -> Page[Ticket]:
         # 1. Базовый запрос
-        stmt = select(self.model)
+        stmt = select(self.model).options(selectinload(self.model.attachments))
 
         # 2. Фильтрация с учётом области видимости
         if scopes.reporter_id is not None:

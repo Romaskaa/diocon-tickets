@@ -115,7 +115,7 @@ class SqlCounterpartyRepository(SqlAlchemyRepository[Counterparty, CounterpartyO
 
         # Применение фильтров
         if conditions:
-            stmt = stmt.where(and_(conditions))
+            stmt = stmt.where(and_(*conditions))
 
         return await self._paginate(stmt, params)
 
