@@ -28,7 +28,9 @@ class UserRepository(Repository[User]):
         """
 
     async def get_customers(self, counterparty_id: UUID) -> Page[User]:
-        """Получение всех клиентов привязанных к контрагенту"""
+        """
+        Получение всех клиентов привязанных к контрагенту
+        """
 
 
 class TokenBlacklist(Protocol):

@@ -14,6 +14,7 @@ from .dependencies import (
     TicketFiltersDep,
     TicketRepoDep,
     TicketServiceDep,
+    TicketViewServiceDep,
 )
 from .domain.vo import ReactionType
 from .infra.ai import suggest_ticket_fields
@@ -32,6 +33,7 @@ from .schemas import (
     TicketPreview,
     TicketResponse,
     TicketStatusChange,
+    TicketViewResponse,
 )
 
 router = APIRouter(prefix="/tickets", tags=["Тикеты"])
@@ -68,8 +70,7 @@ async def get_my_tickets(
 @router.get(
     path="",
     status_code=status.HTTP_200_OK,
-    response_model=Page[TicketPreview],
-    dependencies=[Depends(get_current_user)],
+    response_model=Page[TicketViewResponse],
     summary="Фильтрация тикетов с пагинацией",
     description="Фильтрует тикеты учитывая роль пользователя",
     responses={
@@ -78,12 +79,12 @@ async def get_my_tickets(
     }
 )
 async def get_tickets(
-        params: PaginationDep,
+        current_user: CurrentUserDep,
+        pagination: PaginationDep,
         filters: TicketFiltersDep,
-        repository: TicketRepoDep,
-) -> Page[TicketPreview]:
-    page = await repository.paginate(params, filters)
-    return page.to_response(map_ticket_to_preview)
+        service: TicketViewServiceDep,
+) -> Page[TicketViewResponse]:
+    return await service.get_tickets(pagination, filters, current_user)
 
 
 @router.get(

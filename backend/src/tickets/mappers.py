@@ -8,6 +8,7 @@ from .schemas import (
     Tag,
     TicketPreview,
     TicketResponse,
+    TicketViewResponse,
 )
 
 
@@ -18,6 +19,29 @@ def map_ticket_to_preview(ticket: Ticket) -> TicketPreview:
         updated_at=ticket.updated_at,
         created_by=ticket.created_by,
         reporter_id=ticket.reporter_id,
+        number=f"{ticket.number}",
+        title=ticket.title,
+        type=ticket.type,
+        status=ticket.status,
+        priority=ticket.priority,
+    )
+
+
+def map_ticket_to_view_response(
+        ticket: Ticket,
+        reporter_full_name: str,
+        assignee_full_name: str | None = None,
+        counterparty_name: str | None = None,
+        project_key: str | None = None,
+) -> TicketViewResponse:
+    return TicketViewResponse(
+        id=ticket.id,
+        created_at=ticket.created_at,
+        updated_at=ticket.updated_at,
+        reporter_full_name=reporter_full_name,
+        assignee_full_name=assignee_full_name,
+        counterparty_name=counterparty_name,
+        project_key=project_key,
         number=f"{ticket.number}",
         title=ticket.title,
         type=ticket.type,
