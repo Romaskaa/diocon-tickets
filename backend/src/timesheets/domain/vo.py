@@ -12,12 +12,12 @@ class WorklogStatus(StrEnum):
     def is_editable(self) -> bool:
         """Можно ли редактировать запись"""
 
-        return self == self.DRAFT
+        return self in {self.DRAFT, self.REJECTED}
 
     def is_final(self) -> bool:
         """Является ли статус финальным"""
 
-        return self in {self.APPROVED, self.REJECTED}
+        return self == self.APPROVED
 
 
 class TimesheetStatus(StrEnum):

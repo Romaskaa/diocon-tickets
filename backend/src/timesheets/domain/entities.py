@@ -7,6 +7,8 @@ from ...shared.domain.entities import AggregateRoot, Entity
 from ...shared.domain.exceptions import InvalidStateError, InvariantViolationError
 from ...shared.utils.time import current_datetime
 from .events import (
+    TimesheetApproved,
+    TimesheetRejected,
     TimesheetSubmitted,
     WorklogApproved,
     WorklogCreated,
@@ -291,15 +293,31 @@ class Timesheet(AggregateRoot):
         )
 
     def add_worklog(
-            self, worklog_id: UUID, hours_spent: Decimal, worklog_status: WorklogStatus
+            self,
+            worklog_id: UUID,
+            hours_spent: Decimal,
+            entry_date: date,
+            worklog_status: WorklogStatus,
+            worklog_user_id: UUID
     ) -> None:
         """Добавление факта потраченных часов в ЛУРВ"""
 
         if hours_spent <= 0:
             raise ValueError("Cannot add negative number of hours")
 
+        # Нельзя добавить чужой лог в ЛУРВ
+        if worklog_user_id != self.user_id:
+            raise InvalidStateError(
+                f"Cannot add worklog belonging to user '{worklog_user_id}' "
+                f"inti timesheet of user '{self.user_id}'"
+            )
+
         if worklog_id in self.worklog_ids:
             return
+
+        # Дата лога должна попадать в диапазон ЛУРВ
+        if not (self.period_start <= entry_date <= self.period_end):
+            raise InvariantViolationError("Worklog date is out of timesheet period")
 
         self.worklog_ids.append(worklog_id)
         self.total_hours += hours_spent
@@ -341,8 +359,10 @@ class Timesheet(AggregateRoot):
     def submit(self) -> None:
         """Отправить ЛУРВ на согласование"""
 
-        if self.status != TimesheetStatus.DRAFT:
-            raise InvalidStateError("Only DRAFT timesheet can be submitted")
+        if self.status not in {
+            TimesheetStatus.DRAFT, TimesheetStatus.REJECTED, TimesheetStatus.PARTIALLY_APPROVED
+        }:
+            raise InvalidStateError("Only DRAFT or REJECTED timesheet can be submitted")
 
         if not self.worklog_ids:
             raise InvariantViolationError(
@@ -358,5 +378,45 @@ class Timesheet(AggregateRoot):
                 user_id=self.user_id,
                 total_hours=self.total_hours,
                 submitted_at=self.submitted_at,
+            )
+        )
+
+    def approve(self, approved_by: UUID) -> None:
+        """Согласовать ЛУРВ"""
+
+        if self.status != TimesheetStatus.SUBMITTED:
+            raise InvalidStateError("Only SUBMITTED timesheet can be approved")
+
+        self.status = TimesheetStatus.APPROVED
+        self.approved_by = approved_by
+        self.approved_at = current_datetime()
+        self.updated_at = current_datetime()
+
+        self.register_event(
+            TimesheetApproved(
+                timesheet_id=self.id,
+                approved_by=approved_by,
+                approved_at=self.approved_at,
+                total_hours=self.total_hours,
+            )
+        )
+
+    def reject(self, rejected_by: UUID, reason: str) -> None:
+        """Отклонение всего ЛУРВ"""
+
+        if self.status != TimesheetStatus.SUBMITTED:
+            raise InvalidStateError("Only SUBMITTED timesheet can be rejected")
+
+        if not reason.strip():
+            raise ValueError("Rejection reason cannot be empty")
+
+        self.status = TimesheetStatus.REJECTED
+        self.updated_at = current_datetime()
+
+        self.register_event(
+            TimesheetRejected(
+                timesheet_id=self.id,
+                rejected_by=rejected_by,
+                reason=reason,
             )
         )

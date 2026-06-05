@@ -77,3 +77,7 @@ class TimesheetApproved(Event):
 @dataclass(frozen=True, kw_only=True)
 class TimesheetRejected(Event):
     """ЛУРВ отклонён"""
+
+    timesheet_id: UUID
+    rejected_by: UUID
+    reason: str
