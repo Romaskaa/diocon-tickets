@@ -57,7 +57,7 @@ class TimesheetOrm(Base):
     approved_hours: Mapped[Decimal] = mapped_column(Numeric(precision=6, scale=2))
     pending_hours: Mapped[Decimal] = mapped_column(Numeric(precision=6, scale=2))
 
-    worklogs_ids: Mapped[list[UUID]] = mapped_column(JSONB)
+    worklog_ids: Mapped[list[UUID]] = mapped_column(JSONB)
 
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

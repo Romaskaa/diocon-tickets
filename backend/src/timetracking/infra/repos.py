@@ -9,9 +9,9 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from ...shared.infra.repos import ModelMapper, SqlAlchemyRepository
 from ...tasks.infra.models import TaskOrm
 from ...tickets.infra.models import TicketOrm
-from ..domain.entities import Worklog
+from ..domain.entities import Timesheet, Worklog
 from ..domain.vo import WorklogStatus
-from .models import WorklogOrm
+from .models import TimesheetOrm, WorklogOrm
 
 
 class WorklogMapper(ModelMapper[Worklog, WorklogOrm]):
@@ -150,3 +150,57 @@ class SqlWorklogRepository(SqlAlchemyRepository[Worklog, WorklogOrm]):
         results = await self.session.execute(stmt)
 
         return [self.model_mapper.to_entity(model) for model in results.scalars().all()]
+
+
+class TimesheetMapper(ModelMapper[Timesheet, TimesheetOrm]):
+
+    @staticmethod
+    def to_entity(model: TimesheetOrm) -> Timesheet:
+        return Timesheet(
+            id=model.id,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+            deleted_at=model.deleted_at,
+            user_id=model.user_id,
+            period_start=model.period_start,
+            period_end=model.period_end,
+            name=model.name,
+            counterparty_id=model.counterparty_id,
+            project_id=model.project_id,
+            status=model.status,
+            total_hours=model.total_hours,
+            approved_hours=model.approved_hours,
+            pending_hours=model.pending_hours,
+            worklog_ids=model.worklog_ids,
+            submitted_at=model.submitted_at,
+            approved_at=model.approved_at,
+            approved_by=model.approved_by,
+        )
+
+    @staticmethod
+    def from_entity(entity: Timesheet) -> TimesheetOrm:
+        return TimesheetOrm(
+            id=entity.id,
+            created_at=entity.created_at,
+            updated_at=entity.updated_at,
+            deleted_at=entity.deleted_at,
+            user_id=entity.user_id,
+            period_start=entity.period_start,
+            period_end=entity.period_end,
+            name=entity.name,
+            counterparty_id=entity.counterparty_id,
+            project_id=entity.project_id,
+            status=entity.status,
+            total_hours=entity.total_hours,
+            approved_hours=entity.approved_hours,
+            pending_hours=entity.pending_hours,
+            worklog_ids=entity.worklog_ids,
+            submitted_at=entity.submitted_at,
+            approved_at=entity.approved_at,
+            approved_by=entity.approved_by,
+        )
+
+
+class SqlTimesheetRepository(SqlAlchemyRepository[Timesheet, TimesheetOrm]):
+    model = TimesheetOrm
+    model_mapper = TimesheetMapper
