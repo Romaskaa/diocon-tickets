@@ -8,7 +8,7 @@ from pydantic import SecretStr
 from src.iam.domain.entities import User
 from src.iam.domain.vo import FullName, Username, UserRole
 from src.notifications.policies import TicketCreatedPolicy
-from src.projects.domain.entities import Membership, Project
+from src.projects.domain.entities import ProjectMembership, Project
 from src.projects.domain.vo import ProjectRole, ProjectStatus
 from src.tickets.domain.events import TicketCreated
 from src.tickets.domain.vo import ProjectKey, Priority
@@ -53,7 +53,7 @@ def fake_user(**kwargs):
 
 
 def fake_membership(project_id: UUID, user_id: UUID, project_role: ProjectRole):
-    return Membership(
+    return ProjectMembership(
         project_id=project_id,
         user_id=user_id,
         project_role=project_role,

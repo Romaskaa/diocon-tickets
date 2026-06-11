@@ -2,7 +2,7 @@ from typing import ClassVar
 
 import re
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import StrEnum, auto
 
 from ...shared.domain.vo import ValueObject
 
@@ -10,10 +10,20 @@ from ...shared.domain.vo import ValueObject
 class ProjectStatus(StrEnum):
     """Статус проекта"""
 
-    ACTIVE = "active"
-    ON_HOLD = "on_hold"  # На удержании
-    ARCHIVED = "archived"
-    COMPLETED = "completed"
+    ACTIVE = auto()
+    ON_HOLD = auto()  # На удержании
+    ARCHIVED = auto()
+    COMPLETED = auto()
+
+
+class ProjectStageStatus(StrEnum):
+    """Статус этапа проекта"""
+
+    PLANNED = auto()
+    ACTIVE = auto()
+    COMPLETED = auto()
+    ON_HOLD = auto()  # Приостановлен
+    SKIPPED = auto()  # Пропущен
 
 
 class ProjectRole(StrEnum):

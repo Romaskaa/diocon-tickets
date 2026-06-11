@@ -13,7 +13,7 @@ from src.iam.domain.repos import InvitationRepository, TokenBlacklist, UserRepos
 from src.iam.domain.vo import FullName, UserRole
 from src.notifications.domain.repos import NotificationRepository, PreferenceRepository
 from src.products.domain.repo import ProductRepository
-from src.projects.domain.entities import Membership, Project
+from src.projects.domain.entities import Project, ProjectMembership
 from src.projects.domain.repos import MembershipRepository, ProjectRepository
 from src.projects.domain.services import ProjectAccessService
 from src.projects.domain.vo import ProjectRole
@@ -219,7 +219,7 @@ def membership_factory(fake_membership_repo):
     async def _make_membership(
             user_id: UUID, project_id: UUID, project_role: ProjectRole, **overrides
     ):
-        membership = Membership(
+        membership = ProjectMembership(
             user_id=user_id,
             project_id=project_id,
             project_role=project_role,

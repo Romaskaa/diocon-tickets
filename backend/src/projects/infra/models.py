@@ -8,7 +8,7 @@ from ...core.database import Base
 from ..domain.vo import ProjectRole, ProjectStatus
 
 
-class MembershipOrm(Base):
+class ProjectMembershipOrm(Base):
     __tablename__ = "project_memberships"
 
     project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.id"), unique=False)
@@ -37,7 +37,7 @@ class ProjectOrm(Base):
     owner_id: Mapped[UUID]
     created_by: Mapped[UUID]
 
-    memberships: Mapped[list["MembershipOrm"]] = relationship(back_populates="project")
+    memberships: Mapped[list["ProjectMembershipOrm"]] = relationship(back_populates="project")
 
     __table_args__ = (
         Index("ix_project_key", "key"),

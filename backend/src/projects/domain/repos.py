@@ -4,7 +4,7 @@ from uuid import UUID
 
 from ...shared.domain.repo import Repository
 from ...shared.schemas import Page, Pagination
-from .entities import Membership, Project
+from .entities import Project, ProjectMembership
 from .vo import ProjectKey, ProjectRole
 
 
@@ -30,7 +30,7 @@ class ProjectRepository(Repository[Project]):
         """
 
 
-class MembershipRepository(Repository[Membership]):
+class MembershipRepository(Repository[ProjectMembership]):
 
     @override
     async def paginate(
@@ -38,12 +38,12 @@ class MembershipRepository(Repository[Membership]):
             pagination: Pagination,
             project_id: UUID | None = None,
             include_project_roles: list[ProjectRole] | None = None,
-    ) -> Page[Membership]: ...
+    ) -> Page[ProjectMembership]: ...
 
-    async def find(self, project_id: UUID, user_id: UUID) -> Membership | None:
+    async def find(self, project_id: UUID, user_id: UUID) -> ProjectMembership | None:
         """Поиск участника внутри проекта по уникальной комбинации"""
 
-    async def get_by_user(self, user_id: UUID) -> list[Membership]:
+    async def get_by_user(self, user_id: UUID) -> list[ProjectMembership]:
         """
         Возвращает все членства пользователя во всех проектах.
         Используется для получения полного списка проектов пользователя

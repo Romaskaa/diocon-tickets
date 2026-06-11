@@ -5,7 +5,7 @@ import pytest
 from src.iam.domain.exceptions import PermissionDeniedError
 from src.iam.domain.vo import UserRole
 from src.iam.schemas import CurrentUser
-from src.projects.domain.entities import Membership, Project
+from src.projects.domain.entities import ProjectMembership, Project
 from src.projects.domain.vo import ProjectRole
 from src.shared.domain.exceptions import NotFoundError
 from src.shared.utils.time import current_datetime
@@ -58,7 +58,7 @@ async def created_project(fake_project_repo, fake_membership_repo, current_suppo
     )
     await fake_project_repo.create(project)
 
-    membership = Membership(
+    membership = ProjectMembership(
         project_id=project.id,
         user_id=current_support_user.user_id,
         project_role=ProjectRole.CONTRIBUTOR,

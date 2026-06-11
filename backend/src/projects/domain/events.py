@@ -32,3 +32,21 @@ class ProjectArchived(Event):
 
     project_id: UUID
     archived_by: UUID
+
+
+@dataclass(frozen=True, kw_only=True)
+class ProjectStageStarted(Event):
+    """Начался новый этап проекта"""
+
+    project_id: UUID
+    stage_id: UUID
+    started_by: UUID
+
+
+@dataclass(frozen=True, kw_only=True)
+class ProjectStageCompleted(Event):
+    """Этап проекта успешно завершён"""
+
+    project_id: UUID
+    stage_id: UUID
+    completed_by: UUID

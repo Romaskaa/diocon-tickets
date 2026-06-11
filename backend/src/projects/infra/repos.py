@@ -6,15 +6,15 @@ from sqlalchemy import and_, exists, or_, select
 
 from ...shared.infra.repos import ModelMapper, SqlAlchemyRepository
 from ...shared.schemas import Page, Pagination
-from ..domain.entities import Membership, Project
+from ..domain.entities import ProjectMembership, Project
 from ..domain.vo import ProjectKey, ProjectRole
-from .models import MembershipOrm, ProjectOrm
+from .models import ProjectMembershipOrm, ProjectOrm
 
 
-class MembershipMapper(ModelMapper[Membership, MembershipOrm]):
+class MembershipMapper(ModelMapper[ProjectMembership, ProjectMembershipOrm]):
     @staticmethod
-    def to_entity(model: MembershipOrm) -> Membership:
-        return Membership(
+    def to_entity(model: ProjectMembershipOrm) -> ProjectMembership:
+        return ProjectMembership(
             id=model.id,
             created_at=model.created_at,
             updated_at=model.updated_at,
@@ -27,8 +27,8 @@ class MembershipMapper(ModelMapper[Membership, MembershipOrm]):
         )
 
     @staticmethod
-    def from_entity(entity: Membership) -> MembershipOrm:
-        return MembershipOrm(
+    def from_entity(entity: ProjectMembership) -> ProjectMembershipOrm:
+        return ProjectMembershipOrm(
             id=entity.id,
             created_at=entity.created_at,
             updated_at=entity.updated_at,
@@ -104,9 +104,9 @@ class SqlProjectRepository(SqlAlchemyRepository[Project, ProjectOrm]):
         stmt = select(self.model)
         membership_exists = exists().where(
             and_(
-                MembershipOrm.project_id == self.model.id,
-                MembershipOrm.user_id == user_id,
-                MembershipOrm.deleted_at.is_(None),
+                ProjectMembershipOrm.project_id == self.model.id,
+                ProjectMembershipOrm.user_id == user_id,
+                ProjectMembershipOrm.deleted_at.is_(None),
             )
         )
 
@@ -119,8 +119,8 @@ class SqlProjectRepository(SqlAlchemyRepository[Project, ProjectOrm]):
         return await self._paginate(stmt, pagination)
 
 
-class SqlMembershipRepository(SqlAlchemyRepository[Membership, MembershipOrm]):
-    model = MembershipOrm
+class SqlMembershipRepository(SqlAlchemyRepository[ProjectMembership, ProjectMembershipOrm]):
+    model = ProjectMembershipOrm
     model_mapper = MembershipMapper
 
     @override
@@ -129,7 +129,7 @@ class SqlMembershipRepository(SqlAlchemyRepository[Membership, MembershipOrm]):
             pagination: Pagination,
             project_id: UUID | None = None,
             include_project_roles: list[ProjectRole] | None = None,
-    ) -> Page[Membership]:
+    ) -> Page[ProjectMembership]:
         # 1. Базовый запрос для получения всех участников
         stmt = select(self.model)
 
@@ -142,7 +142,7 @@ class SqlMembershipRepository(SqlAlchemyRepository[Membership, MembershipOrm]):
 
         return await self._paginate(stmt, pagination)
 
-    async def find(self, project_id: UUID, user_id: UUID) -> Membership | None:
+    async def find(self, project_id: UUID, user_id: UUID) -> ProjectMembership | None:
         stmt = select(self.model).where(
             (self.model.project_id == project_id) & (self.model.user_id == user_id)
         )
@@ -150,7 +150,7 @@ class SqlMembershipRepository(SqlAlchemyRepository[Membership, MembershipOrm]):
         model = result.scalar_one_or_none()
         return None if model is None else self.model_mapper.to_entity(model)
 
-    async def get_by_user(self, user_id: UUID) -> list[Membership]:
+    async def get_by_user(self, user_id: UUID) -> list[ProjectMembership]:
         stmt = select(self.model).where(
             (self.model.user_id == user_id) & (self.model.deleted_at.is_(None))
         )

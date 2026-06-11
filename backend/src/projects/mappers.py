@@ -1,9 +1,9 @@
 from ..shared.schemas import Page
-from .domain.entities import Membership, Project
+from .domain.entities import ProjectMembership, Project
 from .schemas import MembershipResponse, ProjectDetailedResponse, ProjectResponse
 
 
-def map_membership_to_response(membership: Membership) -> MembershipResponse:
+def map_membership_to_response(membership: ProjectMembership) -> MembershipResponse:
     return MembershipResponse(
         project_role=membership.project_role,
         user_id=membership.user_id,
@@ -29,7 +29,7 @@ def map_project_to_response(project: Project) -> ProjectResponse:
 
 
 def map_project_to_detailed_response(
-        project: Project, memberships: Page[Membership],
+        project: Project, memberships: Page[ProjectMembership],
 ) -> ProjectDetailedResponse:
     return ProjectDetailedResponse(
         id=project.id,
