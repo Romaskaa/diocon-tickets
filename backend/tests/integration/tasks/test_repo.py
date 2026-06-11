@@ -17,6 +17,10 @@ def task_repo(session):
     return SqlTaskRepository(session)
 
 
+def make_task_number() -> TaskNumber:
+    return TaskNumber(f"TASK-{uuid4().int % 10**8:08d}")
+
+
 def make_task(
     *,
     number: TaskNumber | None = None,
@@ -30,7 +34,7 @@ def make_task(
     completed_at = current_datetime() if status == TaskStatus.DONE else None
 
     return Task(
-        number=number or TaskNumber(f"TASK-{uuid4().int % 1000:03d}"),
+        number=number or make_task_number(),
         title=f"Integration task {uuid4()}",
         description="Task for repository integration test",
         status=status,
@@ -182,12 +186,12 @@ class TestGetGroupedByStatus:
         project_id = uuid4()
         other_project_id = uuid4()
         project_task = make_task(
-            number=TaskNumber("TASK-201"),
+            number=make_task_number(),
             status=TaskStatus.TODO,
             project_id=project_id,
         )
         other_project_task = make_task(
-            number=TaskNumber("TASK-202"),
+            number=make_task_number(),
             status=TaskStatus.TODO,
             project_id=other_project_id,
         )

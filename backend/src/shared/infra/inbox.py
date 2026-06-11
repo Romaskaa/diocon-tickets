@@ -48,12 +48,13 @@ class InboxRepository:
                 message_id=message_id,
                 event_type=event_type,
                 payload=payload,
+                status=MessageStatus.PENDING,
             )
             .on_conflict_do_nothing()
         )
         result = await self.session.execute(stmt)
 
-        return result.rowcount() > 0
+        return result.rowcount > 0
 
     async def get_pending(self, limit: int = 100) -> list[InboxMessage]:
         """
