@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID, uuid4
 
 from ...shared.domain.entities import AggregateRoot, Entity
@@ -23,15 +23,15 @@ class ProjectMembership(Entity):
     """
 
     project_id: UUID
-    user_id: UUID
     project_role: ProjectRole
+    user_id: UUID
     added_by: UUID
 
 
 @dataclass(kw_only=True)
 class ProjectStage(Entity):
     """
-    Этап проекта
+    Этап проекта - структурированный шаг в жизненном цикле проекта
     """
 
     project_id: UUID
@@ -40,6 +40,11 @@ class ProjectStage(Entity):
 
     status: ProjectStageStatus
 
+    # Плановые даты (для планирования и диаграммы Ганта)
+    planned_start: date | None = None
+    planned_end: date | None = None
+
+    # Фактические даты
     started_at: datetime | None = None
     completed_at: datetime | None = None
     responsible_id: UUID | None = None  # Ответственный за этап
@@ -50,7 +55,7 @@ class ProjectStage(Entity):
     def __post_init__(self) -> None:
         # Название этапа не может быть пустым
         if not self.name.strip():
-            raise ValueError("Project stage cannot be empty")
+            raise ValueError("Project stage name cannot be empty")
 
         # Порядковый номер этапа не может быть
         if self.order < 1:
@@ -58,6 +63,80 @@ class ProjectStage(Entity):
                 "Project stage order cannot be less then 1. "
                 "Order should be: 1; 2; 3; 4; ..."
             )
+
+        # Плановая дата начала не может быть больше плановой даты завершения
+        if self.planned_start is not None and self.planned_end is not None \
+                and self.planned_start > self.planned_end:
+            raise InvariantViolationError(
+                "Planned start date cannot be greater than planned end date"
+            )
+
+        # Проект не может завершиться раньше, чам он начнётся
+        if self.started_at is not None and self.completed_at is not None \
+                and self.started_at > self.completed_at:
+            raise InvariantViolationError("The project cannot be completed before it starts")
+
+    @property
+    def is_overdue(self) -> bool:
+        """Просрочен ли срок выполнения"""
+
+        today = current_datetime().date()
+        return bool(self.planned_end is not None and today > self.planned_end)
+
+    @property
+    def planned_duration_days(self) -> int | None:
+        """Продолжительность этапа в днях"""
+
+        if self.planned_start is not None and self.planned_end is not None:
+            return (self.planned_end - self.planned_start).days + 1
+
+        return None
+
+    def establish_planned_schedule(self, start: date, end: date) -> None:
+        """Запланировать график проведения этапа"""
+
+        if start > end:
+            raise ValueError("Start planned date cannot be greater than planned end date")
+
+        # Нельзя сдвигать плановое начало этапа в прошлое, если этап уже начался
+        if self.started_at is not None and start < self.started_at.date():
+            raise InvariantViolationError("Cannot set planned start date before actual start date")
+
+        self.planned_start = start
+        self.planned_end = end
+        self.updated_at = current_datetime()
+
+    def edit(
+            self,
+            *,
+            name: str | None = None,
+            description: str | None = None,
+            responsible_id: UUID | None = None,
+            completion_criteria: list[str] | None = None,
+    ) -> None:
+        """Обновление справочной информации этапа"""
+
+        changed = False
+
+        if name is not None and name.strip() and name.strip() != self.name:
+            self.name = name.strip()
+            changed = True
+
+        if description is not None and description.strip() \
+                and description.strip() != self.description:
+            self.description = description.strip()
+            changed = True
+
+        if responsible_id is not None and responsible_id != self.responsible_id:
+            self.responsible_id = responsible_id
+            changed = True
+
+        if completion_criteria is not None and completion_criteria != self.completion_criteria:
+            self.completion_criteria = completion_criteria
+            changed = True
+
+        if changed:
+            self.updated_at = current_datetime()
 
     def start(self, started_by: UUID) -> None:
         """Начать этап проекта"""
@@ -197,7 +276,12 @@ class Project(AggregateRoot):
 
         self.stages.sort(key=lambda x: x.order)
 
-    def add_stage(self, name: str, order: int | None = None) -> ProjectStage:
+    def add_stage(
+            self, name: str,
+            order: int | None = None,
+            planned_start: date | None = None,
+            planned_end: date | None = None,
+    ) -> ProjectStage:
         """Добавление этапа в проект, по умолчанию добавление в коней списка этапов"""
 
         # Определение и валидация порядка этапа
@@ -215,7 +299,9 @@ class Project(AggregateRoot):
             project_id=self.id,
             name=name.strip(),
             order=order,
-            status=ProjectStageStatus.PLANNED
+            status=ProjectStageStatus.PLANNED,
+            planned_start=planned_start,
+            planned_end=planned_end,
         )
         self.stages.append(stage)
         self.updated_at = current_datetime()
