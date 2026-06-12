@@ -6,12 +6,12 @@ from sqlalchemy import and_, exists, or_, select
 
 from ...shared.infra.repos import ModelMapper, SqlAlchemyRepository
 from ...shared.schemas import Page, Pagination
-from ..domain.entities import ProjectMembership, Project
+from ..domain.entities import Project, ProjectMembership, ProjectStage
 from ..domain.vo import ProjectKey, ProjectRole
-from .models import ProjectMembershipOrm, ProjectOrm
+from .models import ProjectMembershipOrm, ProjectOrm, ProjectStageOrm
 
 
-class MembershipMapper(ModelMapper[ProjectMembership, ProjectMembershipOrm]):
+class ProjectMembershipMapper(ModelMapper[ProjectMembership, ProjectMembershipOrm]):
     @staticmethod
     def to_entity(model: ProjectMembershipOrm) -> ProjectMembership:
         return ProjectMembership(
@@ -22,8 +22,7 @@ class MembershipMapper(ModelMapper[ProjectMembership, ProjectMembershipOrm]):
             project_id=model.project_id,
             user_id=model.user_id,
             project_role=model.project_role,
-            added_at=model.added_at,
-            added_by=model.added_by,
+            created_by=model.created_by,
         )
 
     @staticmethod
@@ -36,8 +35,49 @@ class MembershipMapper(ModelMapper[ProjectMembership, ProjectMembershipOrm]):
             user_id=entity.user_id,
             project_id=entity.project_id,
             project_role=entity.project_role,
-            added_at=entity.added_at,
-            added_by=entity.added_by,
+            added_by=entity.created_by,
+        )
+
+
+class ProjectStageMapper(ModelMapper[ProjectStage, ProjectStageOrm]):
+    @staticmethod
+    def to_entity(model: ProjectStageOrm) -> ProjectStage:
+        return ProjectStage(
+            id=model.id,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+            deleted_at=model.deleted_at,
+            project_id=model.project_id,
+            name=model.name,
+            order=model.order,
+            status=model.status,
+            planned_start=model.planned_start,
+            planned_end=model.planned_end,
+            started_at=model.started_at,
+            completed_at=model.completed_at,
+            responsible_id=model.responsible_id,
+            description=model.description,
+            completion_criteria=model.completion_criteria,
+        )
+
+    @staticmethod
+    def from_entity(entity: ProjectStage) -> ProjectStageOrm:
+        return ProjectStageOrm(
+            id=entity.id,
+            created_at=entity.created_at,
+            updated_at=entity.updated_at,
+            deleted_at=entity.deleted_at,
+            project_id=entity.project_id,
+            name=entity.name,
+            order=entity.order,
+            status=entity.status,
+            planned_start=entity.planned_start,
+            planned_end=entity.planned_end,
+            started_at=entity.started_at,
+            completed_at=entity.completed_at,
+            responsible_id=entity.responsible_id,
+            description=entity.description,
+            completion_criteria=entity.completion_criteria,
         )
 
 
@@ -56,6 +96,8 @@ class ProjectMapper(ModelMapper[Project, ProjectOrm]):
             counterparty_id=model.counterparty_id,
             owner_id=model.owner_id,
             status=model.status,
+            current_stage_id=model.current_stage_id,
+            stages=[ProjectStageMapper.to_entity(stage) for stage in model.stages]
         )
 
     @staticmethod
@@ -72,6 +114,8 @@ class ProjectMapper(ModelMapper[Project, ProjectOrm]):
             counterparty_id=entity.counterparty_id,
             owner_id=entity.owner_id,
             status=entity.status,
+            current_stage_id=entity.current_stage_id,
+            stages=[ProjectStageMapper.from_entity(stage) for stage in entity.stages],
         )
 
 
@@ -121,7 +165,7 @@ class SqlProjectRepository(SqlAlchemyRepository[Project, ProjectOrm]):
 
 class SqlMembershipRepository(SqlAlchemyRepository[ProjectMembership, ProjectMembershipOrm]):
     model = ProjectMembershipOrm
-    model_mapper = MembershipMapper
+    model_mapper = ProjectMembershipMapper
 
     @override
     async def paginate(

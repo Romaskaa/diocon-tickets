@@ -25,7 +25,7 @@ class ProjectMembership(Entity):
     project_id: UUID
     project_role: ProjectRole
     user_id: UUID
-    added_by: UUID
+    created_by: UUID
 
 
 @dataclass(kw_only=True)
@@ -247,7 +247,7 @@ class Project(AggregateRoot):
             project_id=self.id,
             user_id=user_id,
             project_role=project_role,
-            added_by=created_by,
+            created_by=created_by,
         )
 
         # Регистрация доменного события
