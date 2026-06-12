@@ -1,10 +1,10 @@
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, NonNegativeInt
 
 from ..shared.schemas import Page
-from .domain.vo import ProjectRole, ProjectStatus
+from .domain.vo import ProjectRole, ProjectStageStatus, ProjectStatus
 
 
 class ProjectBase(BaseModel):
@@ -32,14 +32,46 @@ class ProjectCreate(ProjectBase):
     """Схема для создания проекта"""
 
 
-class MembershipResponse(BaseModel):
+class ProjectMembershipResponse(BaseModel):
     """Участник проекта"""
 
-    user_id: UUID = Field(..., description="ID пользователя в системе")
+    project_id: UUID = Field(..., description="ID проекта в котором состоит участник")
     project_role: ProjectRole = Field(..., description="Роль в проекте")
-    added_at: datetime = Field(..., description="Дата добавления в проект")
-    added_by: UUID = Field(..., description="ID пользователя, который добавил участника")
+    user_id: UUID = Field(..., description="ID пользователя в системе")
+    created_by: UUID = Field(..., description="ID пользователя, который добавил участника")
+    created_at: datetime = Field(..., description="Дата добавления участника")
     is_active: bool = Field(..., description="Активен ли участник в проекте")
+
+
+class ProjectStageResponse(BaseModel):
+    """Этап проекта (логический блок в рамках которого выполняются работы)"""
+
+    id: UUID = Field(..., description="ID этапа")
+    created_at: datetime = Field(..., description="Дата создания")
+    updated_at: datetime = Field(..., description="Дата последнего изменения")
+
+    project_id: UUID = Field(..., description="ID проекта")
+    name: str = Field(..., description="Название этапа")
+    order: int = Field(
+        ..., description="Порядковый номер этапа (все этапы должны выполняться по порядку)"
+    )
+    status: ProjectStageStatus = Field(..., description="Текущий статус этапа")
+
+    planned_start: date | None = Field(None, description="Запланированная дата начала этапа")
+    planned_end: date | None = Field(None, description="Запланированная дата завершения этапа")
+
+    started_at: datetime | None = Field(None, description="Дата начала")
+    completed_at: datetime | None = Field(None, description="Дата завершения")
+    responsible_id: UUID | None = Field(None, description="Ответственный за этап")
+    description: str | None = Field(
+        None, description="Детальное описание (например, что будет выполнено в рамках этапа"
+    )
+    completion_criteria: list[str] = Field(default_factory=list, description="Критерии приёмки")
+
+    is_overdue: bool = Field(..., description="Просрочены ли сроки выполнения")
+    planned_duration_days: NonNegativeInt | None = Field(
+        None, description="Продолжительность этапа в днях"
+    )
 
 
 class ProjectResponse(ProjectBase):
@@ -48,15 +80,21 @@ class ProjectResponse(ProjectBase):
     id: UUID = Field(..., description="Уникальный ID проекта")
     created_at: datetime = Field(..., description="Дата создания проекта")
     updated_at: datetime = Field(..., description="Дата обновления проекта")
+
     owner_id: UUID = Field(..., description="Владелец проекта (обычно support и выше)")
     created_by: UUID = Field(..., description="ID пользователя создавшего проект")
     status: ProjectStatus = Field(..., description="Статус проекта")
 
+    current_stage_id: UUID | None = Field(..., description="ID текущего этапа проекта")
+    stages: list[ProjectStageResponse] = Field(default_factory=list, description="Этапы проекта")
+
 
 class ProjectDetailedResponse(ProjectResponse):
-    """Детальный API ответ проекта"""
+    """Проект с детализированной информацией: участники, этапы, денормализованные поля"""
 
-    memberships: Page[MembershipResponse] = Field(..., description="Список участников проекта")
+    memberships: Page[ProjectMembershipResponse] = Field(
+        ..., description="Список участников проекта с пагинацией"
+    )
 
 
 class KeyCheckResult(BaseModel):
