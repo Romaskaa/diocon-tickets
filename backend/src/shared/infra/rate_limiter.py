@@ -41,7 +41,7 @@ if current < limit then
 else
     redis.call('EXPIRE', key, math.ceil(window_ms / 1000) + 10)
     return {0, current}   -- {denied, count_before_insert}
-planned_end
+end
 """
 
 # Функции для идентификации запросов клиентов
@@ -81,8 +81,8 @@ class RateLimitResult:
 
     allowed: bool
     current: int
-    remaining: int | None  # None при ошибке
-    reset_at: float  # Unix timestamp
+    remaining: int | None
+    reset_at: float
 
 
 class RateLimiter:
