@@ -65,7 +65,7 @@ class ProjectKey(ValueObject):
         if not self.PATTERN.match(cleaned):
             raise ValueError(
                 f"Invalid project key format: '{self.value}'. "
-                "Key must be 2-10 characters long, start with a letter (A-Z), "
+                "Key must be 2-10 characters long, planned_start with a letter (A-Z), "
                 "and contain only letters and digits (no spaces, underscores, or Cyrillic)."
             )
 

@@ -47,7 +47,7 @@ async def init_s3_buckets() -> None:
                 await client.head_bucket(Bucket=bucket)
                 logger.info("S3 bucket - `%s` already exists, skipping creation", bucket)
             except ClientError:
-                logger.info("S3 bucket does not exist, start creating - `%s`", bucket)
+                logger.info("S3 bucket does not exist, planned_start creating - `%s`", bucket)
                 await client.create_bucket(Bucket=bucket)
 
     logger.info("S3 storage initialized successfully")

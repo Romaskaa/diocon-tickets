@@ -60,3 +60,12 @@ class ProjectStageCompleted(Event):
     project_id: UUID
     stage_id: UUID
     completed_by: UUID
+
+
+@dataclass(frozen=True, kw_only=True)
+class ProjectStageSkipped(Event):
+    """Этап проекта пропущен"""
+
+    project_id: UUID
+    stage_id: UUID
+    skipped_by: UUID

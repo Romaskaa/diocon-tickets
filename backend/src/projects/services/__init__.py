@@ -1,3 +1,7 @@
-__all__ = ["ProjectService"]
+__all__ = [
+    "ProjectMembershipService",
+    "ProjectService",
+]
 
-from .project_service import ProjectService
+from .membership import ProjectMembershipService
+from .project import ProjectService

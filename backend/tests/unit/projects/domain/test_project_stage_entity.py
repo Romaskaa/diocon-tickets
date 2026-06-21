@@ -34,7 +34,7 @@ class TestInvariants:
     def test_must_valid_planned_period(self):
         with pytest.raises(
                 InvariantViolationError,
-                match="start date cannot be greater than planned end date"
+                match="planned_start date cannot be greater than planned planned_end date"
         ):
             ProjectStage(
                 project_id=uuid4(),
@@ -74,7 +74,7 @@ class TestEstablishPlannedSchedule:
         stage = stage_factory()
 
         with pytest.raises(
-                ValueError, match="Start planned date cannot be greater than planned end date"
+                ValueError, match="Start planned date cannot be greater than planned planned_end date"
         ):
             stage.establish_planned_schedule(
                 start=date(2026, 6, 15), end=date(2026, 6, 12)
@@ -83,7 +83,7 @@ class TestEstablishPlannedSchedule:
     def test_failed_when_panned_start_before_actual_start(self, stage_factory):
         stage = stage_factory(started_at=current_datetime())
 
-        with pytest.raises(InvariantViolationError, match="start date before actual start date"):
+        with pytest.raises(InvariantViolationError, match="planned_start date before actual planned_start date"):
             stage.establish_planned_schedule(
                 start=date(2026, 6, 11), end=date(2026, 6, 12)
             )
@@ -137,7 +137,7 @@ class TestStart:
     def test_start_success(self, stage_factory):
         stage = stage_factory(status=ProjectStageStatus.PLANNED)
         old_updated_at = stage.updated_at
-        stage.start(started_by=uuid4())
+        stage.planned_start(started_by=uuid4())
 
         assert stage.started_at is not None
         assert stage.status == ProjectStageStatus.ACTIVE
@@ -156,7 +156,7 @@ class TestStart:
         stage = stage_factory(status=wrong_status)
 
         with pytest.raises(InvalidStateError, match="Only PLANNED stage can be started"):
-            stage.start(started_by=uuid4())
+            stage.planned_start(started_by=uuid4())
 
 
 class TestComplete:

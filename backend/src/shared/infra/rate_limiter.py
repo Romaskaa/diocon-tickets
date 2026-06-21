@@ -41,7 +41,7 @@ if current < limit then
 else
     redis.call('EXPIRE', key, math.ceil(window_ms / 1000) + 10)
     return {0, current}   -- {denied, count_before_insert}
-end
+planned_end
 """
 
 # Функции для идентификации запросов клиентов

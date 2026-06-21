@@ -193,7 +193,7 @@ class InvitationService:
 
         # 2. Создание нового приглашения, если не нашлось существующее
         if invitation is None:
-            logger.info("Invitation is not found, start creating new")
+            logger.info("Invitation is not found, planned_start creating new")
 
             if assigned_role.is_internal():
                 invitation = invite_internal(

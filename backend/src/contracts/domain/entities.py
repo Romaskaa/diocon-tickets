@@ -77,7 +77,7 @@ class ServiceContract(AggregateRoot):
 
         # 3. Дата окончания не может быть раньше даты начала
         if self.end_date is not None and self.end_date < self.start_date:
-            raise InvariantViolationError("End date cannot be before start date")
+            raise InvariantViolationError("End date cannot be before planned_start date")
 
     def add_package(
             self,

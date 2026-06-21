@@ -2,15 +2,17 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from uuid import UUID, uuid4
 
-from ...shared.domain.entities import AggregateRoot, Entity
-from ...shared.domain.exceptions import InvalidStateError, InvariantViolationError, NotFoundError
-from ...shared.utils.time import current_datetime
+from src.shared.domain.entities import AggregateRoot, Entity
+from src.shared.domain.exceptions import InvalidStateError, InvariantViolationError, NotFoundError
+from src.shared.utils.time import current_datetime
+
 from .events import (
     ProjectArchived,
     ProjectCreated,
     ProjectMembershipCreated,
     ProjectMembershipRemoved,
     ProjectStageCompleted,
+    ProjectStageSkipped,
     ProjectStageStarted,
 )
 from .vo import ProjectKey, ProjectRole, ProjectStageStatus, ProjectStatus
@@ -84,7 +86,7 @@ class ProjectStage(Entity):
         if self.planned_start is not None and self.planned_end is not None \
                 and self.planned_start > self.planned_end:
             raise InvariantViolationError(
-                "Planned start date cannot be greater than planned end date"
+                "Planned planned_start date cannot be greater than planned planned_end date"
             )
 
         # Проект не может завершиться раньше, чам он начнётся
@@ -112,11 +114,11 @@ class ProjectStage(Entity):
         """Запланировать график проведения этапа"""
 
         if start > end:
-            raise ValueError("Start planned date cannot be greater than planned end date")
+            raise ValueError("Start planned date cannot be greater than planned planned_end date")
 
         # Нельзя сдвигать плановое начало этапа в прошлое, если этап уже начался
         if self.started_at is not None and start < self.started_at.date():
-            raise InvariantViolationError("Cannot set planned start date before actual start date")
+            raise InvariantViolationError("Cannot set planned end date before actual start date")
 
         self.planned_start = start
         self.planned_end = end
@@ -154,7 +156,7 @@ class ProjectStage(Entity):
         if changed:
             self.updated_at = current_datetime()
 
-    def start(self, started_by: UUID) -> None:
+    def start(self) -> None:
         """Начать этап проекта"""
 
         if self.status != ProjectStageStatus.PLANNED:
@@ -164,15 +166,7 @@ class ProjectStage(Entity):
         self.started_at = current_datetime()
         self.updated_at = current_datetime()
 
-        self.register_event(
-            ProjectStageStarted(
-                project_id=self.project_id,
-                stage_id=self.id,
-                started_by=started_by,
-            )
-        )
-
-    def complete(self, completed_by: UUID) -> None:
+    def complete(self) -> None:
         if self.status != ProjectStageStatus.ACTIVE:
             raise InvalidStateError("Only ACTIVE stage can be completed")
 
@@ -180,13 +174,14 @@ class ProjectStage(Entity):
         self.completed_at = current_datetime()
         self.updated_at = current_datetime()
 
-        self.register_event(
-            ProjectStageCompleted(
-                project_id=self.project_id,
-                stage_id=self.id,
-                completed_by=completed_by,
-            )
-        )
+    def skip(self) -> None:
+        """Пропустить запланированный этап (без выполнения)"""
+
+        if self.status in {ProjectStageStatus.COMPLETED, ProjectStageStatus.SKIPPED}:
+            raise InvalidStateError(f"Cannot skip a stage with status {self.status}")
+
+        self.status = ProjectStageStatus.SKIPPED
+        self.updated_at = current_datetime()
 
 
 @dataclass(kw_only=True)
@@ -372,13 +367,13 @@ class Project(AggregateRoot):
 
         return None
 
-    def _find_stage(self, stage_id: UUID) -> ProjectStage | None:
+    def find_stage(self, stage_id: UUID) -> ProjectStage | None:
         return next((stage for stage in self.stages if stage.id == stage_id), None)
 
     def start_stage(self, stage_id: UUID, started_by: UUID) -> None:
         """Начать новую стадию проекта, необходимо закончить предыдущею"""
 
-        stage = self._find_stage(stage_id)
+        stage = self.find_stage(stage_id)
         if not stage:
             raise NotFoundError(f"Stage with ID {stage_id} does not exist in project")
 
@@ -392,18 +387,34 @@ class Project(AggregateRoot):
 
         if stage.order != excepted_order:
             raise InvalidStateError(
-                f"Cannot start stage '{stage.name}' with order {stage.order}. "
+                f"Cannot planned_start stage '{stage.name}' with order {stage.order}. "
                 f"Excepted stage order - {excepted_order}"
             )
 
-        stage.start(started_by)
+        stage.start()
         self.current_stage_id = stage.id
         self.updated_at = current_datetime()
+
+        self.register_event(
+            ProjectStageStarted(
+                project_id=self.id,
+                stage_id=stage.id,
+                started_by=started_by,
+            )
+        )
+
+    def _is_project_finalized(self) -> bool:
+        """Завершён ли проект (все этапа должны быть пройдены)."""
+
+        return all(
+            stage.status in {ProjectStageStatus.COMPLETED, ProjectStageStatus.SKIPPED}
+            for stage in self.stages
+        )
 
     def complete_stage(self, stage_id: UUID, completed_by: UUID) -> None:
         """Успешное завершение этапа проекта"""
 
-        stage = self._find_stage(stage_id)
+        stage = self.find_stage(stage_id)
         if stage is None:
             raise NotFoundError(f"Stage with ID {stage_id} does not exist in project")
 
@@ -411,11 +422,11 @@ class Project(AggregateRoot):
         if stage.status != ProjectStageStatus.ACTIVE:
             raise InvalidStateError("Only ACTIVE stages can be completed")
 
-        stage.complete(completed_by)
+        stage.complete()
 
         # Если это был последний этап - то проект успешно завершён
         # Перевод в статус - COMPLETED
-        if all(stage.status == ProjectStageStatus.COMPLETED for stage in self.stages):
+        if self._is_project_finalized():
             self.status = ProjectStatus.COMPLETED
 
         # Обнуление текущей стадии, так как этап успешно завершён
@@ -423,3 +434,48 @@ class Project(AggregateRoot):
             self.current_stage_id = None
 
         self.updated_at = current_datetime()
+
+        self.register_event(
+            ProjectStageCompleted(
+                project_id=self.id,
+                stage_id=stage.id,
+                completed_by=completed_by,
+            )
+        )
+
+    def skip_stage(self, stage_id: UUID, skipped_by: UUID) -> None:
+        """Пропуск этапа проекта"""
+
+        stage = self.find_stage(stage_id)
+        if stage is None:
+            raise NotFoundError(f"Stage with ID {stage_id} does not exist in project")
+
+        stage.skip()
+        self.updated_at = current_datetime()
+
+        if self.current_stage_id == stage.id:
+            self.current_stage_id = None
+
+        if self._is_project_finalized():
+            self.status = ProjectStatus.COMPLETED
+
+        self.register_event(
+            ProjectStageSkipped(
+                project_id=self.id,
+                stage_id=stage.id,
+                skipped_by=skipped_by,
+            )
+        )
+
+    def remove_stage(self, stage_id: UUID) -> None:
+        """Удаление этапа проекта"""
+
+        stage = self.find_stage(stage_id)
+        if stage is None:
+            raise NotFoundError(f"Stage with ID {stage_id} does not exist in project")
+
+        self.stages = [stage for stage in self.stages if stage.id != stage_id]
+
+        self._sort_stages()
+        for i, stage in enumerate(self.stages, start=1):
+            stage.order = i

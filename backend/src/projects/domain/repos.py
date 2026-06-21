@@ -2,8 +2,9 @@ from typing import override
 
 from uuid import UUID
 
-from ...shared.domain.repo import Repository
-from ...shared.schemas import Page, Pagination
+from src.shared.domain.repo import Repository
+from src.shared.schemas import Page, Pagination
+
 from .entities import Project, ProjectMembership
 from .vo import ProjectKey, ProjectRole
 

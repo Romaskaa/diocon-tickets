@@ -149,7 +149,7 @@ class Username(ValueObject):
         if not self.PATTERN.match(cleaned):
             raise ValueError(
                 "Username can only contains letters, numbers, periods, hyphens and underscores. "
-                "Cannot start or end with a special character, "
+                "Cannot planned_start or planned_end with a special character, "
                 "cannot contain two special characters in a row."
             )
 

@@ -1,10 +1,17 @@
+from typing import Annotated
+
 from datetime import date, datetime
 from uuid import UUID
 
+from fastapi import Body
 from pydantic import BaseModel, Field, NonNegativeInt, PositiveInt
 
 from ..shared.schemas import Page
 from .domain.vo import ProjectRole, ProjectStageStatus, ProjectStatus
+
+NewProjectStagesOrder = Annotated[
+    list[UUID], Body(..., embed=True, description="Новый порядок проведения этапов")
+]
 
 
 class ProjectBase(BaseModel):
@@ -48,7 +55,7 @@ class ProjectStageCreate(BaseModel):
 
     name: str = Field(..., description="Название этапа")
     description: str | None = Field(
-        None, description="Детальное описание (например, что будет выполнено в рамках этапа"
+        None, description="Детальное описание (например, что будет выполнено в рамках этапа)"
     )
     order: PositiveInt | None = Field(
         ...,
@@ -59,6 +66,24 @@ class ProjectStageCreate(BaseModel):
     )
     planned_start: date | None = Field(None, description="Запланированная дата начала этапа")
     planned_end: date | None = Field(None, description="Запланированная дата завершения этапа")
+
+
+class ProjectStageUpdate(BaseModel):
+    """Обновление этапа проекта"""
+
+    name: str | None = Field(None, description="Название этапа")
+    description: str | None = Field(
+        None, description="Детальное описание (например, что будет выполнено в рамках этапа)"
+    )
+    responsible_id: UUID | None = Field(None, description="Ответственный за проведение этапа")
+    completion_criteria: list[str] | None = Field(None, description="Критерии завершения")
+
+
+class ProjectStagePlan(BaseModel):
+    """Планирование этапа проекта"""
+
+    planned_start: date = Field(..., description="Дата начала этапа")
+    planned_end: date = Field(..., description="Плановая дата окончания этапа")
 
 
 class ProjectStageResponse(BaseModel):

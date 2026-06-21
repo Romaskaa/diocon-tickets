@@ -13,7 +13,7 @@ from .domain.repos import ProjectMembershipRepository, ProjectRepository
 from .infra.repos import SqlMembershipRepository, SqlProjectRepository
 from .mappers import map_project_to_response
 from .schemas import ProjectResponse
-from .services import ProjectService
+from .services import ProjectMembershipService, ProjectService
 
 
 def get_project_repo(session: SessionDep) -> SqlProjectRepository:
@@ -32,19 +32,36 @@ def get_project_service(
         session: SessionDep,
         project_repo: ProjectRepoDep,
         membership_repo: MembershipRepoDep,
-        user_repo: UserRepoDep,
         event_publisher: EventPublisherDep,
 ) -> ProjectService:
     return ProjectService(
         session=session,
         project_repo=project_repo,
         membership_repo=membership_repo,
+        event_publisher=event_publisher,
+    )
+
+
+def get_project_membership_service(
+        session: SessionDep,
+        project_repo: ProjectRepoDep,
+        user_repo: UserRepoDep,
+        membership_repo: MembershipRepoDep,
+        event_publisher: EventPublisherDep,
+) -> ProjectMembershipService:
+    return ProjectMembershipService(
+        session=session,
+        project_repo=project_repo,
         user_repo=user_repo,
+        membership_repo=membership_repo,
         event_publisher=event_publisher,
     )
 
 
 ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]
+ProjectMembershipServiceDep = Annotated[
+    ProjectMembershipService, Depends(get_project_membership_service)
+]
 
 
 async def get_project_or_404(project_id: UUID, project_repo: ProjectRepoDep) -> ProjectResponse:
@@ -55,7 +72,7 @@ async def get_project_or_404(project_id: UUID, project_repo: ProjectRepoDep) -> 
     return map_project_to_response(project)
 
 
-async def get_page_of_projects(
+async def get_projects_page(
         pagination: PaginationDep, project_repo: ProjectRepoDep
 ) -> Page[ProjectResponse]:
     page = await project_repo.paginate(pagination)
@@ -79,5 +96,5 @@ async def get_my_projects(
 
 
 ProjectDep = Annotated[ProjectResponse, Depends(get_project_or_404)]
-ProjectPageDep = Annotated[Page[ProjectResponse], Depends(get_page_of_projects)]
+ProjectPageDep = Annotated[Page[ProjectResponse], Depends(get_projects_page)]
 MyProjectsDep = Annotated[Page[ProjectResponse], Depends(get_my_projects)]

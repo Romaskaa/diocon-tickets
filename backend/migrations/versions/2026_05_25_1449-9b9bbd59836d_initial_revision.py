@@ -263,7 +263,7 @@ def upgrade() -> None:
     sa.UniqueConstraint('comment_id', 'author_id', 'reaction_type', name='uq_comment_reaction')
     )
     op.create_index('ix_reactions_comment_author', 'reactions', ['comment_id', 'author_id'], unique=False)
-    # ### end Alembic commands ###
+    # ### planned_end Alembic commands ###
 
 
 def downgrade() -> None:
@@ -291,4 +291,4 @@ def downgrade() -> None:
     op.drop_table('invitations')
     op.drop_table('counterparties')
     op.drop_table('attachments')
-    # ### end Alembic commands ###
+    # ### planned_end Alembic commands ###

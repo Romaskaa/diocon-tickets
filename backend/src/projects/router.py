@@ -9,15 +9,21 @@ from src.shared.schemas import Page
 from .dependencies import (
     MyProjectsDep,
     ProjectDep,
+    ProjectMembershipServiceDep,
     ProjectPageDep,
     ProjectServiceDep,
 )
 from .schemas import (
     KeyCheckResult,
+    NewProjectStagesOrder,
     ProjectCreate,
     ProjectMembershipCreate,
     ProjectMembershipResponse,
     ProjectResponse,
+    ProjectStageCreate,
+    ProjectStagePlan,
+    ProjectStageResponse,
+    ProjectStageUpdate,
 )
 from .utils import generate_project_key
 
@@ -52,7 +58,7 @@ async def check_project_key(key: str, service: ProjectServiceDep) -> KeyCheckRes
     path="",
     status_code=status.HTTP_201_CREATED,
     response_model=ProjectResponse,
-    summary="Создаёт новый проект",
+    summary="Создать новый проект",
     description="Проекты могут создавать только внутренние сотрудники",
     responses={
         201: {"description": "Проект успешно создан."},
@@ -115,7 +121,7 @@ async def create_project_membership(
         project_id: UUID,
         data: ProjectMembershipCreate,
         current_subject: CurrentSubjectDep,
-        service: ProjectServiceDep,
+        service: ProjectMembershipServiceDep,
 ) -> ProjectMembershipResponse:
     return await service.add_member(project_id, data, current_subject)
 
@@ -129,6 +135,152 @@ async def delete_project_membership(
         project_id: UUID,
         user_id: UUID,
         current_subject: CurrentSubjectDep,
-        service: ProjectServiceDep,
+        service: ProjectMembershipServiceDep,
 ) -> None:
     return await service.remove_member(project_id, user_id, current_subject)
+
+
+@router.post(
+    path="/{project_id}/stages",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ProjectResponse,
+    summary="Создать этап проекта"
+)
+async def create_project_stage(
+        project_id: UUID,
+        data: ProjectStageCreate,
+        current_subject: CurrentSubjectDep,
+        service: ProjectMembershipServiceDep,
+) -> ProjectResponse:
+    return await service.add_member(project_id, data, current_subject)
+
+
+@router.patch(
+    path="/{project_id}/stages/{stage_id}",
+    status_code=status.HTTP_200_OK,
+    response_model=ProjectStageResponse,
+    summary="Обновить этап проекта",
+)
+async def update_project_stage(
+        project_id: UUID,
+        stage_id: UUID,
+        current_subject: CurrentSubjectDep,
+        data: ProjectStageUpdate,
+        service: ProjectServiceDep,
+) -> ProjectStageResponse:
+    return await service.edit_stage(
+        project_id=project_id,
+        stage_id=stage_id,
+        data=data,
+        current_subject=current_subject,
+    )
+
+
+@router.patch(
+    path="/{project_id}/stages/order",
+    status_code=status.HTTP_200_OK,
+    response_model=ProjectResponse,
+    summary="Изменить порядок проведения этапов",
+)
+async def reorder_project_stages(
+        project_id: UUID,
+        new_order: NewProjectStagesOrder,
+        current_subject: CurrentSubjectDep,
+        service: ProjectServiceDep,
+) -> ProjectResponse:
+    return await service.reorder_stages(
+        project_id=project_id,
+        new_order=new_order,
+        current_subject=current_subject,
+    )
+
+
+@router.delete(
+    path="/{project_id}/stages/{stage_id}",
+    status_code=status.HTTP_200_OK,
+    response_model=ProjectResponse,
+    summary="Удалить этап из проекта"
+)
+async def delete_project_stage(
+        project_id: UUID,
+        stage_id: UUID,
+        current_subject: CurrentSubjectDep,
+        service: ProjectServiceDep,
+) -> ProjectResponse:
+    return await service.remove_stage(
+        project_id=project_id,
+        stage_id=stage_id,
+        current_subject=current_subject,
+    )
+
+
+@router.post(
+    path="/{project_id}/stages/{stage_id}/start",
+    status_code=status.HTTP_200_OK,
+    response_model=ProjectResponse,
+    summary="Начать этап проекта"
+)
+async def start_project_stage(
+        project_id: UUID,
+        stage_id: UUID,
+        current_subject: CurrentSubjectDep,
+        service: ProjectServiceDep,
+) -> ProjectResponse:
+    return await service.start_stage(
+        project_id=project_id, stage_id=stage_id, current_subject=current_subject
+    )
+
+
+@router.post(
+    path="/{project_id}/stages/{stage_id}/complete",
+    status_code=status.HTTP_200_OK,
+    response_model=ProjectResponse,
+    summary="Завершить этап проекта"
+)
+async def complete_project_stage(
+        project_id: UUID,
+        stage_id: UUID,
+        current_subject: CurrentSubjectDep,
+        service: ProjectServiceDep,
+) -> ProjectResponse:
+    return await service.complete_stage(
+        project_id=project_id, stage_id=stage_id, current_subject=current_subject
+    )
+
+
+@router.post(
+    path="/{project_id}/stages/{stage_id}/skip",
+    status_code=status.HTTP_200_OK,
+    response_model=ProjectResponse,
+    summary="Пропустить этап проекта"
+)
+async def skip_project_stage(
+        project_id: UUID,
+        stage_id: UUID,
+        current_subject: CurrentSubjectDep,
+        service: ProjectServiceDep,
+) -> ProjectResponse:
+    return await service.complete_stage(
+        project_id=project_id, stage_id=stage_id, current_subject=current_subject,
+    )
+
+
+@router.patch(
+    path="/{project_id}/stages/{stage_id}/schedule",
+    status_code=status.HTTP_200_OK,
+    response_model=ProjectStageResponse,
+    summary="Запланировать проведение этапа",
+)
+async def schedule_project_stage(
+        project_id: UUID,
+        stage_id: UUID,
+        data: ProjectStagePlan,
+        current_subject: CurrentSubjectDep,
+        service: ProjectServiceDep,
+) -> ProjectStageResponse:
+    return await service.schedule_stage(
+        project_id=project_id,
+        stage_id=stage_id,
+        data=data,
+        current_subject=current_subject,
+    )

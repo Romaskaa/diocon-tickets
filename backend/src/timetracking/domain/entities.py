@@ -248,7 +248,7 @@ class Timesheet(AggregateRoot):
 
         # Начало периода не может быть больше его конца
         if self.period_start > self.period_end:
-            raise InvariantViolationError("Period start cannot be after period end")
+            raise InvariantViolationError("Period planned_start cannot be after period planned_end")
 
         # Количество часов не может быть отрицательным
         if self.total_hours < 0 or self.approved_hours < 0 or self.pending_hours < 0:
