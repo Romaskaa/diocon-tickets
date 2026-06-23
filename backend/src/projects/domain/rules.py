@@ -12,6 +12,7 @@ from src.iam.domain.authz import (
     AuthorizationRule,
     BaseAuthContext,
     PermissionResult,
+    Subject,
 )
 from src.iam.domain.entities import User
 from src.iam.domain.vo import UserRole
@@ -60,12 +61,14 @@ class IsUserPrincipalRule(AuthorizationRule[BaseAuthContext]):
         return PermissionResult(True)
 
 
-class MembershipExistsRule(AuthorizationRule[ProjectContext]):
+class ProjectMembershipExistsRule:
     """Пользователь должен быть участником проекта"""
 
-    @staticmethod
-    def check(ctx: ProjectContext) -> PermissionResult:
-        if ctx.current_membership is None:
+    def __init__(self, membership: ProjectMembership) -> None:
+        self.membership = membership
+
+    def check(self) -> PermissionResult:
+        if self.membership is None:
             return PermissionResult(False, "You are not member of the project")
 
         return PermissionResult(True)
@@ -100,16 +103,20 @@ class TargetRoleCompatibilityRule(AuthorizationRule[AddMemberContext]):
         return {ProjectRole.VIEWER, ProjectRole.CONTRIBUTOR, ProjectRole.MANAGER}
 
 
-class IsOwnerOrAdminRule(AuthorizationRule[ProjectContext]):
-    @staticmethod
-    def check(ctx: ProjectContext) -> PermissionResult:
-        is_super = (
-                ctx.subject.id in {ctx.project.owner_id, ctx.project.created_by}
-                or ctx.subject.has_role(UserRole.ADMIN)
+class IsProjectOwnerOrManagerRule:
+    """Участник должен являться владельцем или менеджером проекта"""
+
+    def __init__(self, project_membership: ProjectMembership) -> None:
+        self.project_membership = project_membership
+
+    def check(self) -> PermissionResult:
+        is_owner_or_manager = (
+                self.project_membership.has_role(ProjectRole.OWNER)
+                or self.project_membership.has_role(ProjectRole.MANAGER)
         )
         return (
             PermissionResult(True)
-            if is_super
+            if is_owner_or_manager
             else PermissionResult(False, "Not a project super user")
         )
 

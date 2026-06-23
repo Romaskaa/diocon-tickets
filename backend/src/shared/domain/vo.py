@@ -1,5 +1,6 @@
 import abc
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from enum import StrEnum, auto
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,3 +22,28 @@ class ValueObject(abc.ABC):
             f"{self.__class__.__name__}"
             f"({', '.join(f'{k}={v!r}' for k, v in self.__dict__.items())})"
         )
+
+
+class Priority(StrEnum):
+    """
+    Приоритет выполнения рабочей единицы (задача, тикет, ...).
+    """
+
+    LOW = auto()
+    MEDIUM = auto()
+    HIGH = auto()
+    CRITICAL = auto()
+
+
+@dataclass(frozen=True, slots=True)
+class Tag(ValueObject):
+    """
+    Тег - метка (ключевое слово), которые можно присвоить сущности
+    для дополнительной, неструктурированной классификации.
+    """
+
+    name: str
+    color: str = field(default="#3498db")
+
+    def __str__(self) -> str:
+        return self.name

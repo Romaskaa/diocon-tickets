@@ -10,14 +10,18 @@ from src.tickets.domain.vo import TicketNumber
 
 
 class TaskStatus(StrEnum):
-    """Статус выполнения задачи"""
+    """
+    Статус выполнения задачи (используется для трекинга прогресса).
+    """
 
     BACKLOG = auto()
     TODO = auto()
     IN_PROGRESS = auto()
     PAUSED = auto()
     BLOCKED = auto()
-    REVIEW = auto()
+    TO_REVIEW = auto()
+    TO_FIX = auto()
+    TO_TEST = auto()
     DONE = auto()
     CANCELLED = auto()
 

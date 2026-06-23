@@ -26,9 +26,12 @@ class ProjectMembership(Entity):
     """
 
     project_id: UUID
-    project_role: ProjectRole
+    project_roles: list[ProjectRole]
     user_id: UUID
     created_by: UUID
+
+    def has_role(self, role: ProjectRole) -> bool:
+        return role in self.project_roles
 
     def remove(self, removed_by: UUID) -> None:
         if self.is_deleted:

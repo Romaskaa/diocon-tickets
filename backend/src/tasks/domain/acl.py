@@ -52,7 +52,7 @@ def can_move_status(
 
     # Ответственный за задачу может одобрить или отклонить
     if task.reviewer_id == user_id:
-        if task.status == TaskStatus.REVIEW and new_status in {
+        if task.status == TaskStatus.TO_REVIEW and new_status in {
             TaskStatus.IN_PROGRESS, TaskStatus.DONE
         }:
             return PermissionResult(True)
@@ -68,7 +68,7 @@ def can_move_status(
         if new_status in {
             TaskStatus.IN_PROGRESS,
             TaskStatus.BLOCKED,
-            TaskStatus.REVIEW,
+            TaskStatus.TO_REVIEW,
             TaskStatus.DONE,
         }:
             return PermissionResult(True)

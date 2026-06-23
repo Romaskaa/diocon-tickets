@@ -170,7 +170,7 @@ class TestCanMoveStatus:
         """
 
         user_id = uuid4()
-        task = make_task(status=TaskStatus.REVIEW, reviewer_id=user_id)
+        task = make_task(status=TaskStatus.TO_REVIEW, reviewer_id=user_id)
 
         permission = can_move_status(
             task=task, new_status=new_status, user_id=user_id, user_role=UserRole.SUPPORT_MANAGER
@@ -188,7 +188,7 @@ class TestCanMoveStatus:
         """
 
         user_id = uuid4()
-        task = make_task(status=TaskStatus.REVIEW, reviewer_id=user_id)
+        task = make_task(status=TaskStatus.TO_REVIEW, reviewer_id=user_id)
 
         permission = can_move_status(
             task=task, new_status=new_status, user_id=user_id, user_role=UserRole.SUPPORT_AGENT
@@ -199,7 +199,7 @@ class TestCanMoveStatus:
 
     def test_reviewer_cannot_move_task_when_not_review_status(self):
         """
-        Проверяющий не может изменить статус задачи, если текущий статус не REVIEW
+        Проверяющий не может изменить статус задачи, если текущий статус не TO_REVIEW
         """
 
         user_id = uuid4()
@@ -219,7 +219,7 @@ class TestCanMoveStatus:
     )
     @pytest.mark.parametrize(
         "new_status",
-        [TaskStatus.IN_PROGRESS, TaskStatus.BLOCKED, TaskStatus.REVIEW, TaskStatus.DONE]
+        [TaskStatus.IN_PROGRESS, TaskStatus.BLOCKED, TaskStatus.TO_REVIEW, TaskStatus.DONE]
     )
     def test_assignee_can_move_to_work_statuses(self, user_role, new_status):
         """
@@ -474,7 +474,7 @@ class TestCanReviewTask:
         Администратор или менеджер поддержки могут проверить любую задачу
         """
 
-        task = make_task(status=TaskStatus.REVIEW)
+        task = make_task(status=TaskStatus.TO_REVIEW)
 
         permission = can_review_task(task=task, user_id=uuid4(), user_role=user_role)
 
@@ -486,7 +486,7 @@ class TestCanReviewTask:
         """
 
         user_id = uuid4()
-        task = make_task(status=TaskStatus.REVIEW, reviewer_id=user_id)
+        task = make_task(status=TaskStatus.TO_REVIEW, reviewer_id=user_id)
 
         permission = can_review_task(task=task, user_id=user_id, user_role=UserRole.DEVELOPER)
 
@@ -498,7 +498,7 @@ class TestCanReviewTask:
         то он не может проверить её
         """
 
-        task = make_task(status=TaskStatus.REVIEW, reviewer_id=uuid4())
+        task = make_task(status=TaskStatus.TO_REVIEW, reviewer_id=uuid4())
 
         permission = can_review_task(task=task, user_id=uuid4(), user_role=UserRole.SUPPORT_AGENT)
 
@@ -509,7 +509,7 @@ class TestCanReviewTask:
         Другие пользователи не могут проводить ревью задачи
         """
 
-        task = make_task(status=TaskStatus.REVIEW, reviewer_id=uuid4())
+        task = make_task(status=TaskStatus.TO_REVIEW, reviewer_id=uuid4())
 
         permission = can_review_task(task=task, user_id=uuid4(), user_role=UserRole.DEVELOPER)
 

@@ -53,7 +53,7 @@ async def edit_task(
 async def move_task_status(
         task_id: UUID, new_status: NewStatus, current_user: CurrentUserDep, service: TaskServiceDep
 ) -> TaskResponse:
-    return await service.move_to(task_id, new_status, current_user)
+    return await service.change_status(task_id, new_status, current_user)
 
 
 @router.post(

@@ -3,13 +3,15 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...iam.domain.exceptions import PermissionDeniedError
-from ...iam.domain.repos import UserRepository
-from ...iam.schemas import CurrentUser
-from ...projects.domain.repos import ProjectRepository
-from ...projects.domain.services import ProjectAccessService
-from ...shared.domain.events import EventPublisher
-from ...shared.domain.exceptions import InvalidStateError, NotFoundError
+from src.activity_logs.recorder import ActivityLogRecorder
+from src.iam.domain.exceptions import PermissionDeniedError
+from src.iam.domain.repos import UserRepository
+from src.iam.schemas import CurrentUser
+from src.projects.domain.repos import ProjectRepository
+from src.projects.domain.services import ProjectAccessService
+from src.shared.domain.events import EventPublisher
+from src.shared.domain.exceptions import InvalidStateError, NotFoundError
+
 from ...tasks.domain.acl import (
     can_archive_task,
     can_assign_task,
@@ -38,6 +40,7 @@ class TaskService:
             user_repo: UserRepository,
             project_repo: ProjectRepository,
             project_access_service: ProjectAccessService,
+            activity_log_recorder: ActivityLogRecorder,
             event_publisher: EventPublisher,
     ) -> None:
         self.session = session
@@ -46,6 +49,7 @@ class TaskService:
         self.user_repo = user_repo
         self.project_repo = project_repo
         self.project_access_service = project_access_service
+        self.activity_log_recorder = activity_log_recorder
         self.event_publisher = event_publisher
 
     @staticmethod
@@ -129,7 +133,7 @@ class TaskService:
             tags=[Tag(name=tag.name, color=tag.color) for tag in data.tags]
         )
         if data.mark_as_todo:
-            task.move_to(new_status=TaskStatus.TODO, moved_by=current_user.user_id)
+            task.change_status(new_status=TaskStatus.TODO, changed_by=current_user.user_id)
 
         await self.task_repo.create(task)
         await self.session.commit()
@@ -161,7 +165,7 @@ class TaskService:
             raise PermissionDeniedError(permission.reason)
 
         # 3. Изменение статуса задачи и обновление сущности
-        task.move_to(new_status=new_status, moved_by=current_user.user_id)
+        task.change_status(new_status=new_status, changed_by=current_user.user_id)
         await self.task_repo.update(task)
         await self.session.commit()
 

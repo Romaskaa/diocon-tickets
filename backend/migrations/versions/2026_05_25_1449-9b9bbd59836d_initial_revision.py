@@ -102,7 +102,7 @@ def upgrade() -> None:
     sa.Column('number', sa.String(), nullable=False),
     sa.Column('title', sa.String(), nullable=False),
     sa.Column('description', sa.String(), nullable=True),
-    sa.Column('status', sa.Enum('BACKLOG', 'TODO', 'IN_PROGRESS', 'BLOCKED', 'REVIEW', 'DONE', 'CANCELLED', name='taskstatus'), nullable=False),
+    sa.Column('status', sa.Enum('BACKLOG', 'TODO', 'IN_PROGRESS', 'BLOCKED', 'TO_REVIEW', 'DONE', 'CANCELLED', name='taskstatus'), nullable=False),
     sa.Column('priority', sa.Enum('LOW', 'MEDIUM', 'HIGH', 'CRITICAL', name='priority'), nullable=False),
     sa.Column('story_points', sa.Integer(), nullable=True),
     sa.Column('assignee_id', sa.Uuid(), nullable=True),

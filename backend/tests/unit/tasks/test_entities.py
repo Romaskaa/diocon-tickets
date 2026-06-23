@@ -127,9 +127,9 @@ class TestTaskMoveTo:
             (TaskStatus.BACKLOG, TaskStatus.TODO),
             (TaskStatus.TODO, TaskStatus.IN_PROGRESS),
             (TaskStatus.IN_PROGRESS, TaskStatus.BLOCKED),
-            (TaskStatus.IN_PROGRESS, TaskStatus.REVIEW),
-            (TaskStatus.REVIEW, TaskStatus.DONE),
-            (TaskStatus.REVIEW, TaskStatus.IN_PROGRESS),
+            (TaskStatus.IN_PROGRESS, TaskStatus.TO_REVIEW),
+            (TaskStatus.TO_REVIEW, TaskStatus.DONE),
+            (TaskStatus.TO_REVIEW, TaskStatus.IN_PROGRESS),
         ],
     )
     def test_valid_transition(self, current_status, new_status):
@@ -138,7 +138,7 @@ class TestTaskMoveTo:
         """
 
         task = make_task(status=current_status, assignee_id=uuid4())
-        task.move_to(new_status, moved_by=uuid4())
+        task.change_status(new_status, changed_by=uuid4())
 
         assert task.status == new_status
         assert task.updated_at is not None
@@ -159,7 +159,7 @@ class TestTaskMoveTo:
         task = make_task(status=current_status)
 
         with pytest.raises(InvalidStateError):
-            task.move_to(new_status=new_status, moved_by=uuid4())
+            task.change_status(new_status=new_status, changed_by=uuid4())
 
     def test_sets_started_at_when_moving_to_in_progress(self):
         """
@@ -169,7 +169,7 @@ class TestTaskMoveTo:
         task = make_task(status=TaskStatus.TODO, assignee_id=uuid4())
         assert task.started_at is None
 
-        task.move_to(new_status=TaskStatus.IN_PROGRESS, moved_by=uuid4())
+        task.change_status(new_status=TaskStatus.IN_PROGRESS, changed_by=uuid4())
         assert task.started_at is not None
 
     def test_does_not_overwrite_started_at(self):
@@ -181,7 +181,7 @@ class TestTaskMoveTo:
         original_start = current_datetime()
         task.started_at = original_start
 
-        task.move_to(TaskStatus.IN_PROGRESS, uuid4())
+        task.change_status(TaskStatus.IN_PROGRESS, uuid4())
         assert task.started_at == original_start
 
     def test_sets_completed_at_when_moving_to_done(self):
@@ -189,10 +189,10 @@ class TestTaskMoveTo:
         Должно устанавливаться время завершения задачи при переводе в выполнено
         """
 
-        task = make_task(status=TaskStatus.REVIEW)
+        task = make_task(status=TaskStatus.TO_REVIEW)
         assert task.completed_at is None
 
-        task.move_to(new_status=TaskStatus.DONE, moved_by=uuid4())
+        task.change_status(new_status=TaskStatus.DONE, changed_by=uuid4())
         assert task.completed_at is not None
 
     def test_move_to_in_progress_without_assignee_failed(self):
@@ -201,10 +201,10 @@ class TestTaskMoveTo:
         """
 
         task = Task.create(number=TaskNumber("TASK-001"), title="Test task", created_by=uuid4())
-        task.move_to(TaskStatus.TODO, moved_by=uuid4())
+        task.change_status(TaskStatus.TODO, changed_by=uuid4())
 
         with pytest.raises(InvariantViolationError):
-            task.move_to(TaskStatus.IN_PROGRESS, moved_by=uuid4())
+            task.change_status(TaskStatus.IN_PROGRESS, changed_by=uuid4())
 
 
 class TestTaskAssignTo:
@@ -386,7 +386,7 @@ class TestTaskRequestReview:
 
         task.request_review(reviewer_id=reviewer_id, requested_by=uuid4())
 
-        assert task.status == TaskStatus.REVIEW
+        assert task.status == TaskStatus.TO_REVIEW
         assert task.reviewer_id == reviewer_id
 
     def test_reviewer_cannot_be_assignee(self):
@@ -418,7 +418,7 @@ class TestApproveOrRejectReview:
         Одобренное ревью должно изменить статус задачи на выполненный
         """
 
-        task = make_task(status=TaskStatus.REVIEW, assignee_id=uuid4())
+        task = make_task(status=TaskStatus.TO_REVIEW, assignee_id=uuid4())
         task.approve_review(approved_by=uuid4())
 
         assert task.status == TaskStatus.DONE
@@ -429,7 +429,7 @@ class TestApproveOrRejectReview:
         Отклонённое ревью должно возвращать задачу в рабочий статус
         """
 
-        task = make_task(status=TaskStatus.REVIEW, assignee_id=uuid4())
+        task = make_task(status=TaskStatus.TO_REVIEW, assignee_id=uuid4())
         task.reject_review(rejected_by=uuid4())
 
         assert task.status == TaskStatus.IN_PROGRESS
