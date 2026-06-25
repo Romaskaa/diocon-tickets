@@ -180,10 +180,10 @@ class TestMoveTo:
         task = make_task(assignee_id=current_support_user.user_id, status=TaskStatus.TODO)
         await fake_task_repo.create(task)
 
-        response = await task_service.move_to(
+        response = await task_service.change_status(
             task_id=task.id,
             new_status=TaskStatus.IN_PROGRESS,
-            current_user=current_support_user
+            current_subject=current_support_user
         )
 
         assert response.status == TaskStatus.IN_PROGRESS
@@ -202,10 +202,10 @@ class TestMoveTo:
         await fake_task_repo.create(task)
 
         with pytest.raises(PermissionDeniedError):
-            await task_service.move_to(
+            await task_service.change_status(
                 task_id=task.id,
                 new_status=TaskStatus.IN_PROGRESS,
-                current_user=current_support_user
+                current_subject=current_support_user
             )
 
         mock_session.commit.assert_not_awaited()
@@ -219,10 +219,10 @@ class TestMoveTo:
         """
 
         with pytest.raises(NotFoundError):
-            await task_service.move_to(
+            await task_service.change_status(
                 task_id=uuid4(),
                 new_status=TaskStatus.IN_PROGRESS,
-                current_user=current_support_user,
+                current_subject=current_support_user,
             )
 
         mock_session.commit.assert_not_awaited()

@@ -161,7 +161,7 @@ async def change_ticket_status(
     return await service.change_status(
         ticket_id=ticket_id,
         new_status=data.status,
-        current_user=current_user,
+        current_subject=current_user,
     )
 
 

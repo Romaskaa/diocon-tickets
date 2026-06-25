@@ -1,6 +1,7 @@
 from typing import ClassVar
 
 from src.iam.domain.authz import PermissionResult, Subject
+from src.iam.domain.entities import User
 from src.iam.domain.vo import UserRole
 from src.projects.domain.entities import ProjectMembership
 from src.projects.domain.vo import ProjectRole
@@ -19,7 +20,7 @@ class RequireStaffRule:
         UserRole.ACCOUNT_MANAGER,
     }
 
-    def __init__(self, subject: Subject) -> None:
+    def __init__(self, subject: Subject | User) -> None:
         self.subject = subject
 
     def check(self) -> PermissionResult:
@@ -133,3 +134,27 @@ class TaskAssigneeStatusRule:
             )
 
         return PermissionResult(True)
+
+
+class IsTaskReviewer:
+    def __init__(self, subject: Subject | User, task: Task) -> None:
+        self.subject = subject
+        self.task = task
+
+    def check(self) -> PermissionResult:
+        if self.subject.id == self.task.reviewer_id:
+            return PermissionResult(True)
+
+        return PermissionResult(False, "You are not the reviewer for this task")
+
+
+class IsTaskCreator:
+    def __init__(self, subject: Subject, task: Task) -> None:
+        self.subject = subject
+        self.task = task
+
+    def check(self) -> PermissionResult:
+        if self.subject.id == self.task.created_by:
+            return PermissionResult(True)
+
+        return PermissionResult(False, "You are not the creator of this task")

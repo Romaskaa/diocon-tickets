@@ -3,25 +3,26 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import EmailStr, SecretStr
+from pydantic import SecretStr
 
-from ...shared.domain.entities import Entity
-from ...shared.domain.exceptions import InvariantViolationError
-from ...shared.utils.time import current_datetime
-from .vo import FullName, Username, UserRole
+from src.shared.domain.entities import Entity
+from src.shared.domain.exceptions import InvariantViolationError
+from src.shared.utils.time import current_datetime
+
+from .vo import Email, FullName, Username, UserRole
 
 
 @dataclass(kw_only=True)
 class User(Entity):
     """
-    Пользователь тикет системы
+    Пользователь системы (человек).
     """
 
-    email: EmailStr
+    email: Email
     username: Username | None = None
     full_name: FullName | None = None
     avatar_url: str | None = None
-    role: UserRole
+    roles: set[UserRole]
     counterparty_id: UUID | None = None
     password_hash: SecretStr
     is_active: bool = True
@@ -29,14 +30,17 @@ class User(Entity):
     def __post_init__(self) -> None:
         """Проверка инвариантов"""
 
-        # 1. Клиенты должны быть привязаны к контрагенту
+        # Клиенты должны быть привязаны к контрагенту
         if self.counterparty_id is None and \
                 self.role in {UserRole.CUSTOMER, UserRole.CUSTOMER_ADMIN}:
             raise InvariantViolationError("Counterparty must be specified for clients")
 
-        # 2. Сотрудники поддержки не должны иметь прямой связи с контрагентом
+        # Сотрудники поддержки не должны иметь прямой связи с контрагентом
         if self.role.is_support() and self.counterparty_id is not None:
             raise InvariantViolationError("Support users should not have direct counterparty_id")
+
+    def has_role(self, role: UserRole) -> bool:
+        return role in self.roles
 
 
 def generate_invite_token(length: int = 32) -> str:
@@ -51,7 +55,7 @@ class Invitation(Entity):
     Приглашение в тикет систему для нового пользователя
     """
 
-    email: EmailStr
+    email: Email
     token: str = field(default_factory=generate_invite_token)
     invited_by: UUID
     assigned_role: UserRole

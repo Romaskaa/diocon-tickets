@@ -4,31 +4,23 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.activity_logs.recorder import ActivityLogRecorder
+from src.iam.domain.authz import Subject
 from src.iam.domain.exceptions import PermissionDeniedError
 from src.iam.domain.repos import UserRepository
 from src.iam.schemas import CurrentUser
 from src.projects.domain.repos import ProjectRepository
-from src.projects.domain.services import ProjectAccessService
 from src.shared.domain.events import EventPublisher
 from src.shared.domain.exceptions import InvalidStateError, NotFoundError
+from src.tickets.domain.entities import Ticket
+from src.tickets.domain.repos import TicketRepository
+from src.tickets.domain.vo import Tag
 
-from ...tasks.domain.acl import (
-    can_archive_task,
-    can_assign_task,
-    can_create_task,
-    can_edit_task,
-    can_move_status,
-    can_request_review,
-    can_review_task,
-)
-from ...tasks.domain.entities import Task
-from ...tasks.domain.repos import TaskRepository
-from ...tasks.domain.vo import TaskNumber, TaskStatus
-from ...tasks.mappers import map_task_to_response
-from ...tasks.schemas import TaskCreate, TaskEdit, TaskResponse, TaskReview
-from ...tickets.domain.entities import Ticket
-from ...tickets.domain.repos import TicketRepository
-from ...tickets.domain.vo import Tag
+from ..domain.authz import TaskAuthZService
+from ..domain.entities import Task
+from ..domain.repos import TaskRepository
+from ..domain.vo import TaskNumber, TaskStatus
+from ..mappers import map_task_to_response
+from ..schemas import TaskCreate, TaskEdit, TaskResponse, TaskReview
 
 
 class TaskService:
@@ -39,7 +31,7 @@ class TaskService:
             ticket_repo: TicketRepository,
             user_repo: UserRepository,
             project_repo: ProjectRepository,
-            project_access_service: ProjectAccessService,
+            task_authz_service: TaskAuthZService,
             activity_log_recorder: ActivityLogRecorder,
             event_publisher: EventPublisher,
     ) -> None:
@@ -48,7 +40,7 @@ class TaskService:
         self.ticket_repo = ticket_repo
         self.user_repo = user_repo
         self.project_repo = project_repo
-        self.project_access_service = project_access_service
+        self.task_authz_service = task_authz_service
         self.activity_log_recorder = activity_log_recorder
         self.event_publisher = event_publisher
 
@@ -73,25 +65,25 @@ class TaskService:
 
         return project_id
 
-    async def create(self, data: TaskCreate, current_user: CurrentUser) -> TaskResponse:
-        """Создание задачи"""
+    async def create(self, data: TaskCreate, current_subject: Subject) -> TaskResponse:
+        """
+        Создание новой задачи.
+        """
 
-        # 1. Проверка прав на создание задачи
-        permission = can_create_task(current_user.role)
+        permission = await self.task_authz_service.can_create_task(
+            subject=current_subject, project_id=data.project_id
+        )
         if not permission.allowed:
             raise PermissionDeniedError(permission.reason)
 
-        # 2. Получение тикета если он указан для создания задачи
         ticket = None
         if data.ticket_id is not None:
             ticket = await self.ticket_repo.read(data.ticket_id)
             if ticket is None:
                 raise NotFoundError(f"Ticket with ID {data.ticket_id} not found")
 
-        # 3. Разрешение проекта
         project_id = self._resolve_project_id(data, ticket)
 
-        # 4. Проверка проекта на существование + авторизация
         project_key = None
 
         if project_id is not None:
@@ -101,16 +93,6 @@ class TaskService:
 
             project_key = project.key
 
-            # 4.1. Проверка прав на создание проекта
-            permission = await self.project_access_service.can_create_task(
-                project_id=project_id,
-                user_id=current_user.user_id,
-                user_role=current_user.role
-            )
-            if not permission.allowed:
-                raise PermissionDeniedError(permission.reason)
-
-        # 5. Создание задачи с уникальным номером
         sequence = await self.task_repo.get_next_sequence(
             ticket_id=None if ticket is None else ticket.id, project_id=project_id
         )
@@ -129,23 +111,24 @@ class TaskService:
             estimated_hours=data.estimated_hours,
             project_id=project_id,
             ticket_id=data.ticket_id,
-            created_by=current_user.user_id,
+            created_by=current_subject.id,
             tags=[Tag(name=tag.name, color=tag.color) for tag in data.tags]
         )
         if data.mark_as_todo:
-            task.change_status(new_status=TaskStatus.TODO, changed_by=current_user.user_id)
+            task.change_status(new_status=TaskStatus.TODO, changed_by=current_subject.id)
 
         await self.task_repo.create(task)
+
+        events = list(task.collect_events())
+        await self.activity_log_recorder.record_all(events)
         await self.session.commit()
 
-        # 5. Публикация доменных событий
-        for event in task.collect_events():
-            await self.event_publisher.publish(event)
+        await self.event_publisher.pyblish_all(events)
 
         return map_task_to_response(task)
 
-    async def move_to(
-            self, task_id: UUID, new_status: TaskStatus, current_user: CurrentUser
+    async def change_status(
+            self, task_id: UUID, new_status: TaskStatus, current_subject: Subject
     ) -> TaskResponse:
         """Изменение статуса задачи"""
 
@@ -158,14 +141,14 @@ class TaskService:
         permission = can_move_status(
             task=task,
             new_status=new_status,
-            user_id=current_user.user_id,
-            user_role=current_user.role
+            user_id=current_subject.user_id,
+            user_role=current_subject.role
         )
         if not permission.allowed:
             raise PermissionDeniedError(permission.reason)
 
         # 3. Изменение статуса задачи и обновление сущности
-        task.change_status(new_status=new_status, changed_by=current_user.user_id)
+        task.change_status(new_status=new_status, changed_by=current_subject.user_id)
         await self.task_repo.update(task)
         await self.session.commit()
 
