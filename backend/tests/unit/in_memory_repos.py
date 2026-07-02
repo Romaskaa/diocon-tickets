@@ -182,7 +182,7 @@ class InMemoryProjectRepository(InMemoryRepository[Project]):
                 return next(
                     (
                         membership
-                        for membership in project.memberships
+                        for membership in project.members
                         if membership.user_id == user_id
                     ), None
                 )

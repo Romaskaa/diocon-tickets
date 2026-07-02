@@ -11,8 +11,8 @@ from src.shared.domain.repos import UnitOfWork, finalize, get_or_raise_404
 from ..domain.authz import ProjectAuthZService
 from ..domain.entities import Project
 from ..domain.repos import ProjectMemberRepository, ProjectRepository
-from ..mappers import map_membership_to_response
-from ..schemas import ProjectMembershipCreate, ProjectMembershipResponse
+from ..mappers import map_member_to_response
+from ..schemas import ProjectMemberCreate, ProjectMemberResponse
 
 
 class ProjectMemberService:
@@ -32,8 +32,8 @@ class ProjectMemberService:
         self.event_publisher = event_publisher
 
     async def add_member(
-            self, project_id: UUID, data: ProjectMembershipCreate, current_subject: Subject
-    ) -> ProjectMembershipResponse:
+            self, project_id: UUID, data: ProjectMemberCreate, current_subject: Subject
+    ) -> ProjectMemberResponse:
         """
         Добавление нового участника в проект.
         """
@@ -45,7 +45,7 @@ class ProjectMemberService:
             subject=current_subject,
             project=project,
             invitee=invitee,
-            target_roles={data.project_role},
+            target_roles=data.project_roles,
         )
         if not permission.allowed:
             raise PermissionDeniedError(permission.reason)
@@ -56,13 +56,13 @@ class ProjectMemberService:
 
         member = project.create_member(
             user_id=data.user_id,
-            project_role=data.project_role,
+            project_roles=list(data.project_roles),
             created_by=current_subject.id,
         )
         await self.member_repo.create(member)
         await finalize(self.uow, project, event_publisher=self.event_publisher)
 
-        return map_membership_to_response(member)
+        return map_member_to_response(member)
 
     async def remove_member(
             self, project_id: UUID, user_id: UUID, current_subject: Subject

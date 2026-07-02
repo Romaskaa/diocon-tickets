@@ -6,11 +6,13 @@ from uuid import UUID
 from fastapi import Body
 from pydantic import BaseModel, Field, NonNegativeInt, PositiveInt
 
-from ..shared.schemas import Page
+from src.shared.schemas import Page
+
 from .domain.vo import ProjectRole, ProjectStageStatus, ProjectStatus
 
 NewProjectStagesOrder = Annotated[
-    list[UUID], Body(..., embed=True, description="Новый порядок проведения этапов")
+    list[list[UUID]],
+    Body(..., embed=True, description="Новый порядок проведения этапов с разделением на группы")
 ]
 
 
@@ -39,11 +41,13 @@ class ProjectCreate(ProjectBase):
     """Схема для создания проекта"""
 
 
-class ProjectMembershipResponse(BaseModel):
-    """Участник проекта"""
+class ProjectMemberResponse(BaseModel):
+    """
+    Участник проекта.
+    """
 
     project_id: UUID = Field(..., description="ID проекта в котором состоит участник")
-    project_role: ProjectRole = Field(..., description="Роль в проекте")
+    project_roles: set[ProjectRole] = Field(..., description="Роли в проекте")
     user_id: UUID = Field(..., description="ID пользователя в системе")
     created_by: UUID = Field(..., description="ID пользователя, который добавил участника")
     created_at: datetime = Field(..., description="Дата добавления участника")
@@ -51,13 +55,15 @@ class ProjectMembershipResponse(BaseModel):
 
 
 class ProjectStageCreate(BaseModel):
-    """Создание нового этапа проекта"""
+    """
+    Создание нового этапа проекта.
+    """
 
     name: str = Field(..., description="Название этапа")
     description: str | None = Field(
         None, description="Детальное описание (например, что будет выполнено в рамках этапа)"
     )
-    order: PositiveInt | None = Field(
+    execution_order: PositiveInt | None = Field(
         ...,
         description="""\
         Порядковый номер этапа (все этапы должны выполняться по порядку).
@@ -69,7 +75,9 @@ class ProjectStageCreate(BaseModel):
 
 
 class ProjectStageUpdate(BaseModel):
-    """Обновление этапа проекта"""
+    """
+    Обновление этапа проекта.
+    """
 
     name: str | None = Field(None, description="Название этапа")
     description: str | None = Field(
@@ -80,14 +88,18 @@ class ProjectStageUpdate(BaseModel):
 
 
 class ProjectStagePlan(BaseModel):
-    """Планирование этапа проекта"""
+    """
+    Планирование этапа проекта.
+    """
 
     planned_start: date = Field(..., description="Дата начала этапа")
     planned_end: date = Field(..., description="Плановая дата окончания этапа")
 
 
 class ProjectStageResponse(BaseModel):
-    """Этап проекта (логический блок в рамках которого выполняются работы)"""
+    """
+    Этап проекта (логический блок в рамках которого выполняются работы).
+    """
 
     id: UUID = Field(..., description="ID этапа")
     created_at: datetime = Field(..., description="Дата создания")
@@ -95,7 +107,7 @@ class ProjectStageResponse(BaseModel):
 
     project_id: UUID = Field(..., description="ID проекта")
     name: str = Field(..., description="Название этапа")
-    order: PositiveInt = Field(
+    execution_order: PositiveInt = Field(
         ..., description="Порядковый номер этапа (все этапы должны выполняться по порядку)"
     )
     status: ProjectStageStatus = Field(..., description="Текущий статус этапа")
@@ -118,7 +130,9 @@ class ProjectStageResponse(BaseModel):
 
 
 class ProjectResponse(ProjectBase):
-    """API схема ответа для проекта"""
+    """
+    API схема ответа для проекта.
+    """
 
     id: UUID = Field(..., description="Уникальный ID проекта")
     created_at: datetime = Field(..., description="Дата создания проекта")
@@ -128,20 +142,23 @@ class ProjectResponse(ProjectBase):
     created_by: UUID = Field(..., description="ID пользователя создавшего проект")
     status: ProjectStatus = Field(..., description="Статус проекта")
 
-    current_stage_id: UUID | None = Field(..., description="ID текущего этапа проекта")
     stages: list[ProjectStageResponse] = Field(default_factory=list, description="Этапы проекта")
 
 
 class ProjectDetailedResponse(ProjectResponse):
-    """Проект с детализированной информацией: участники, этапы, денормализованные поля"""
+    """
+    Проект с детализированной информацией: участники, этапы, денормализованные поля.
+    """
 
-    memberships: Page[ProjectMembershipResponse] = Field(
+    members: Page[ProjectMemberResponse] = Field(
         ..., description="Список участников проекта с пагинацией"
     )
 
 
 class KeyCheckResult(BaseModel):
-    """Результат проверки уникальности ключа"""
+    """
+    Результат проверки уникальности ключа.
+    """
 
     available: bool = Field(..., description="Доступен ли ключ")
     suggestions: list[str] = Field(
@@ -149,8 +166,10 @@ class KeyCheckResult(BaseModel):
     )
 
 
-class ProjectMembershipCreate(BaseModel):
-    """Добавление участника проекта"""
+class ProjectMemberCreate(BaseModel):
+    """
+    Добавление участника проекта.
+    """
 
     user_id: UUID = Field(..., description="ID пользователя, которого нужно добавить")
-    project_role: ProjectRole = Field(..., description="Назначенная роль в проекте")
+    project_roles: set[ProjectRole] = Field(..., description="Назначенные роли внутри проекта")

@@ -7,7 +7,7 @@ from uuid import UUID
 from typing_extensions import Doc
 
 from src.shared.domain.entities import AggregateRoot, Entity
-from src.shared.domain.exceptions import InvalidStateError, InvariantViolationError
+from src.shared.domain.exceptions import InvalidStateError, InvariantViolationError, NotFoundError
 from src.shared.utils.time import current_datetime
 
 from .events import (
@@ -63,7 +63,10 @@ class ProjectStage(Entity):
 
     project_id: UUID
     name: str
-    order: Annotated[int, Doc("Порядковый номер этапа")]
+    execution_order: Annotated[
+        int,
+        Doc("Группа/волна выполнения. Этапы с одинаковым execution_order могут идти параллельно")
+    ]
 
     status: ProjectStageStatus
 
@@ -81,10 +84,10 @@ class ProjectStage(Entity):
         if not self.name.strip():
             raise ValueError("Project stage name cannot be empty")
 
-        if self.order < 1:
+        if self.execution_order < 1:
             raise ValueError(
-                "Project stage order cannot be less then 1. "
-                "Order should be: 1; 2; 3; 4; ..."
+                "Project stage execution execution_order cannot be less then 1. "
+                "Execution execution_order should be: 1; 2; 3; 4; ..."
             )
 
         # Плановая дата начала не может быть больше плановой даты завершения
@@ -216,7 +219,6 @@ class Project(AggregateRoot):
     owner_id: UUID
     created_by: UUID
 
-    current_stage_id: UUID | None = None
     stages: list[ProjectStage] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -299,3 +301,262 @@ class Project(AggregateRoot):
         self.register_event(
             ProjectArchived(project_id=self.id, archived_by=archived_by)
         )
+
+    @property
+    def active_stages(self) -> list[ProjectStage]:
+        """
+        Получить список активных этапов.
+        """
+
+        return [stage for stage in self.stages if stage.status == ProjectStageStatus.ACTIVE]
+
+    def get_stages_by_execution_order(self, execution_order: int) -> list[ProjectStage]:
+        """
+        Получить этапы по порядку их выполнения.
+        """
+
+        return [stage for stage in self.stages if stage.execution_order == execution_order]
+
+    def get_last_execution_order(self) -> int:
+        """
+        Получить порядковый номер последнего этапа.
+        """
+
+        if not self.stages:
+            return 0
+
+        return max(stage.execution_order for stage in self.stages)
+
+    def is_execution_order_completed(self, execution_order: int) -> bool:
+        """
+        Все ли этапы данной группы завершены или пропущены.
+        """
+
+        stages = self.get_stages_by_execution_order(execution_order)
+        if not stages:
+            return False
+
+        return all(
+            stage.status in {ProjectStageStatus.COMPLETED, ProjectStageStatus.SKIPPED}
+            for stage in stages
+        )
+
+    def get_next_executable_order(self) -> int | None:
+        """
+        Возвращает следующий этап который можно начинать.
+        """
+
+        if not self.stages:
+            return None
+
+        max_order = self.get_last_execution_order()
+
+        for order in range(1, max_order + 1):
+            group_stage = self.get_stages_by_execution_order(order)
+
+            if any(stage.status == ProjectStageStatus.ACTIVE for stage in group_stage):
+                return None
+
+            if not self.is_execution_order_completed(order) and \
+                    all(self.is_execution_order_completed(prev) for prev in range(1, order)):
+                return order
+
+        return None
+
+    def _sort_stages(self) -> None:
+        """
+        Сортировка этапов проекта по их порядку.
+        """
+
+        self.stages.sort(key=lambda x: x.execution_order)
+
+    def add_stage(
+        self,
+        name: str,
+        execution_order: int,
+        description: str | None = None,
+        planned_start: date | None = None,
+        planned_end: date | None = None,
+        responsible_id: UUID | None = None,
+    ) -> ProjectStage:
+        """
+        Добавить новый этап в проект.
+        """
+
+        if execution_order < 1:
+            raise ValueError("Execution execution_order must be positive")
+
+        if any(stage.name.lower() == name.strip().lower() for stage in self.stages):
+            raise ValueError(f"Project stage with this name - {name} already exists")
+
+        stage = ProjectStage(
+            project_id=self.id,
+            name=name.strip(),
+            description=description.strip(),
+            execution_order=execution_order,
+            status=ProjectStageStatus.PLANNED,
+            planned_start=planned_start,
+            planned_end=planned_end,
+            responsible_id=responsible_id,
+        )
+        self.stages.append(stage)
+        self._sort_stages()
+        self.updated_at = current_datetime()
+
+        return stage
+
+    def reorder_stages(self, stage_groups: list[list[UUID]]) -> None:
+        """
+        Перестраивает этапы проекта с явным указанием групп выполнения.
+        """
+
+        if not stage_groups:
+            raise ValueError("Stage groups cannot be empty")
+
+        all_stage_ids: set[UUID] = set()
+        for group in stage_groups:
+            if not group:
+                raise ValueError("Empty group in stage groups is not allowed")
+
+            for stage_id in group:
+                if stage_id in all_stage_ids:
+                    raise InvariantViolationError(f"Stage {stage_id} appears more than once")
+
+                all_stage_ids.add(stage_id)
+
+        if len(all_stage_ids) != len(self.stages):
+            raise InvariantViolationError(
+                f"Stage groups must contain all stages exactly once. "
+                f"Expected {len(self.stages)}, got {len(all_stage_ids)}"
+            )
+
+        stages_dict = {stage.id: stage for stage in self.stages}
+        missing = all_stage_ids - set(stages_dict.keys())
+        if missing:
+            raise NotFoundError(f"Some stages not found: {missing}")
+
+        new_stages: list[ProjectStage] = []
+
+        for i, group in enumerate(stage_groups, start=1):
+            for stage_id in group:
+                stage = stages_dict[stage_id]
+                stage.execution_order = i
+                new_stages.append(stage)
+
+        self.stages = new_stages
+
+        self._sort_stages()
+        self.updated_at = current_datetime()
+
+    def find_stage(self, stage_id: UUID) -> ProjectStage | None:
+        return next((stage for stage in self.stages if stage.id == stage_id), None)
+
+    def start_stage(self, stage_id: UUID) -> None:
+        """
+        Начать новую стадию проекта.
+        """
+
+        stage = self.find_stage(stage_id)
+        if not stage:
+            raise NotFoundError(f"Stage with ID {stage_id} does not exist in project")
+
+        next_order = self.get_next_executable_order()
+        if next_order is None:
+            raise InvalidStateError(
+                "Cannot start any stage at the moment "
+                "(previous groups not completed or active stages exist)"
+            )
+
+        if stage.execution_order != next_order:
+            raise InvalidStateError(
+                f"Cannot start stage '{stage.name}'. "
+                f"Next available execution_order is {next_order}"
+            )
+
+        stage.start()
+        self.updated_at = current_datetime()
+
+    def complete_stage(self, stage_id: UUID) -> None:
+        """
+        Успешно завершает этап.
+        """
+
+        stage = self.find_stage(stage_id)
+        if not stage:
+            raise NotFoundError(f"Stage with ID {stage_id} does not exist in project")
+
+        if stage.status != ProjectStageStatus.ACTIVE:
+            raise InvalidStateError("Only ACTIVE stage can be completed")
+
+        stage.complete()
+
+        # Проверяем, не завершился ли весь проект
+        if all(
+            stage.status in {ProjectStageStatus.COMPLETED, ProjectStageStatus.SKIPPED}
+            for stage in self.stages
+        ):
+            self.status = ProjectStatus.COMPLETED
+
+        self.updated_at = current_datetime()
+
+    def remove_stage(self, stage_id: UUID) -> None:
+        """
+        Удалить этап проекта (удалять можно только запланированные или пропущенные этапы).
+        """
+
+        stage = self.find_stage(stage_id)
+        if stage is None:
+            raise NotFoundError(f"Stage with ID {stage_id} does not exist in project")
+
+        if stage.status in {ProjectStageStatus.ACTIVE, ProjectStageStatus.COMPLETED}:
+            raise InvalidStateError("Only PLANNED or SKIPPED stages can be removed")
+
+        self.stages.remove(stage)
+
+        for i, stage in enumerate(sorted(self.stages, key=lambda s: s.execution_order), start=1):
+            stage.order = i
+
+        self.updated_at = current_datetime()
+
+    def skip_stage(self, stage_id: UUID) -> None:
+        """
+        Пропустить этап проекта.
+
+        Правила:
+        - Можно пропустить только этап из следующей доступной группы (execution_order)
+        - В группе уже не должно быть ACTIVE этапов
+        - Все предыдущие группы должны быть завершены
+        """
+
+        stage = self.find_stage(stage_id)
+        if stage is None:
+            raise NotFoundError(f"Stage with ID {stage_id} does not exist")
+
+        if stage.status != ProjectStageStatus.PLANNED:
+            raise InvalidStateError(
+                f"Only PLANNED stages can be skipped. Current status: {stage.status}"
+            )
+
+        next_executable_order = self.get_next_executable_order()
+
+        if next_executable_order is None:
+            raise InvalidStateError(
+                "No stage can be skipped at the moment. "
+                "Either all stages are completed or there are active stages."
+            )
+
+        if stage.execution_order != next_executable_order:
+            raise InvalidStateError(
+                f"Cannot skip stage '{stage.name}' (execution_order={stage.execution_order}). "
+                f"Next available execution_order is {next_executable_order}."
+            )
+
+        stage.skip()
+        self.updated_at = current_datetime()
+
+        # Проверяем, не завершился ли проект после пропуска
+        if all(
+            s.status in {ProjectStageStatus.COMPLETED, ProjectStageStatus.SKIPPED}
+            for s in self.stages
+        ):
+            self.status = ProjectStatus.COMPLETED

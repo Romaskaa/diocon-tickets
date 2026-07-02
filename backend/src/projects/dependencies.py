@@ -13,55 +13,53 @@ from .domain.repos import ProjectMemberRepository, ProjectRepository
 from .infra.repos import SqlProjectMemberRepository, SqlProjectRepository
 from .mappers import map_project_to_response
 from .schemas import ProjectResponse
-from .services import ProjectMembershipService, ProjectService
+from .services import ProjectMemberService, ProjectService
 
 
 def get_project_repo(session: SessionDep) -> SqlProjectRepository:
     return SqlProjectRepository(session)
 
 
-def get_membership_repo(session: SessionDep) -> SqlProjectMemberRepository:
+def get_project_member_repo(session: SessionDep) -> SqlProjectMemberRepository:
     return SqlProjectMemberRepository(session)
 
 
 ProjectRepoDep = Annotated[ProjectRepository, Depends(get_project_repo)]
-MembershipRepoDep = Annotated[ProjectMemberRepository, Depends(get_membership_repo)]
+ProjectMemberRepoDep = Annotated[ProjectMemberRepository, Depends(get_project_member_repo)]
 
 
 def get_project_service(
         session: SessionDep,
         project_repo: ProjectRepoDep,
-        membership_repo: MembershipRepoDep,
+        membership_repo: ProjectMemberRepoDep,
         event_publisher: EventPublisherDep,
 ) -> ProjectService:
     return ProjectService(
-        session=session,
+        uow=session,
         project_repo=project_repo,
         member_repo=membership_repo,
         event_publisher=event_publisher,
     )
 
 
-def get_project_membership_service(
+def get_project_member_service(
         session: SessionDep,
         project_repo: ProjectRepoDep,
         user_repo: UserRepoDep,
-        membership_repo: MembershipRepoDep,
+        member_repo: ProjectMemberRepoDep,
         event_publisher: EventPublisherDep,
-) -> ProjectMembershipService:
-    return ProjectMembershipService(
-        session=session,
+) -> ProjectMemberService:
+    return ProjectMemberService(
+        uow=session,
         project_repo=project_repo,
         user_repo=user_repo,
-        membership_repo=membership_repo,
+        member_repo=member_repo,
         event_publisher=event_publisher,
     )
 
 
 ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]
-ProjectMembershipServiceDep = Annotated[
-    ProjectMembershipService, Depends(get_project_membership_service)
-]
+ProjectMemberServiceDep = Annotated[ProjectMemberService, Depends(get_project_member_service)]
 
 
 async def get_project_or_404(project_id: UUID, project_repo: ProjectRepoDep) -> ProjectResponse:
@@ -96,5 +94,5 @@ async def get_my_projects(
 
 
 ProjectDep = Annotated[ProjectResponse, Depends(get_project_or_404)]
-ProjectPageDep = Annotated[Page[ProjectResponse], Depends(get_projects_page)]
+ProjectsPageDep = Annotated[Page[ProjectResponse], Depends(get_projects_page)]
 MyProjectsDep = Annotated[Page[ProjectResponse], Depends(get_my_projects)]

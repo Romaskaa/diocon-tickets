@@ -12,7 +12,7 @@ from ..domain.vo import ProjectKey, ProjectRole
 from .models import ProjectMemberOrm, ProjectOrm, ProjectStageOrm
 
 
-class ProjectMembershipMapper(ModelMapper[ProjectMember, ProjectMemberOrm]):
+class ProjectMemberMapper(ModelMapper[ProjectMember, ProjectMemberOrm]):
     @staticmethod
     def to_entity(model: ProjectMemberOrm) -> ProjectMember:
         return ProjectMember(
@@ -36,7 +36,7 @@ class ProjectMembershipMapper(ModelMapper[ProjectMember, ProjectMemberOrm]):
             user_id=entity.user_id,
             project_id=entity.project_id,
             project_roles=entity.project_roles,
-            added_by=entity.created_by,
+            created_by=entity.created_by,
         )
 
 
@@ -50,7 +50,7 @@ class ProjectStageMapper(ModelMapper[ProjectStage, ProjectStageOrm]):
             deleted_at=model.deleted_at,
             project_id=model.project_id,
             name=model.name,
-            order=model.order,
+            execution_order=model.execution_order,
             status=model.status,
             planned_start=model.planned_start,
             planned_end=model.planned_end,
@@ -70,7 +70,7 @@ class ProjectStageMapper(ModelMapper[ProjectStage, ProjectStageOrm]):
             deleted_at=entity.deleted_at,
             project_id=entity.project_id,
             name=entity.name,
-            order=entity.order,
+            execution_order=entity.execution_order,
             status=entity.status,
             planned_start=entity.planned_start,
             planned_end=entity.planned_end,
@@ -97,7 +97,6 @@ class ProjectMapper(ModelMapper[Project, ProjectOrm]):
             counterparty_id=model.counterparty_id,
             owner_id=model.owner_id,
             status=model.status,
-            current_stage_id=model.current_stage_id,
             stages=[ProjectStageMapper.to_entity(stage) for stage in model.stages]
         )
 
@@ -115,7 +114,6 @@ class ProjectMapper(ModelMapper[Project, ProjectOrm]):
             counterparty_id=entity.counterparty_id,
             owner_id=entity.owner_id,
             status=entity.status,
-            current_stage_id=entity.current_stage_id,
             stages=[ProjectStageMapper.from_entity(stage) for stage in entity.stages],
         )
 
@@ -145,7 +143,6 @@ class SqlProjectRepository(SqlAlchemyRepository[Project, ProjectOrm]):
         pagination: Pagination,
         owner_only: bool = False,
     ) -> Page[Project]:
-        # 1. Базовый запрос + проверка наличия членства в проекте
         stmt = select(self.model)
         membership_exists = exists().where(
             and_(
@@ -155,7 +152,6 @@ class SqlProjectRepository(SqlAlchemyRepository[Project, ProjectOrm]):
             )
         )
 
-        # 2. Добавление фильтра, если нужны только проекты, где пользователь владелец
         if owner_only:
             stmt = stmt.where(self.model.owner_id == user_id)
         else:
@@ -166,7 +162,7 @@ class SqlProjectRepository(SqlAlchemyRepository[Project, ProjectOrm]):
 
 class SqlProjectMemberRepository(SqlAlchemyRepository[ProjectMember, ProjectMemberOrm]):
     model = ProjectMemberOrm
-    model_mapper = ProjectMembershipMapper
+    model_mapper = ProjectMemberMapper
 
     @override
     async def paginate(
@@ -175,15 +171,13 @@ class SqlProjectMemberRepository(SqlAlchemyRepository[ProjectMember, ProjectMemb
             project_id: UUID | None = None,
             include_project_roles: list[ProjectRole] | None = None,
     ) -> Page[ProjectMember]:
-        # 1. Базовый запрос для получения всех участников
         stmt = select(self.model)
 
-        # 2. Применение фильтров
         if project_id is not None:
             stmt = stmt.where(self.model.project_id == project_id)
 
         if include_project_roles is not None:
-            stmt = stmt.where(self.model.project_role.in_(include_project_roles))
+            stmt = stmt.where(self.model.project_roles.in_(include_project_roles))
 
         return await self._paginate(stmt, pagination)
 

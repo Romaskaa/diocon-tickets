@@ -12,7 +12,7 @@ from ..crm.infra.repos import SqlCounterpartyRepository
 from ..iam.dependencies import UserRepoDep
 from ..iam.domain.entities import User
 from ..iam.infra.repos import SqlUserRepository
-from ..projects.dependencies import MembershipRepoDep, ProjectAccessServiceDep, ProjectRepoDep
+from ..projects.dependencies import ProjectMemberRepoDep, ProjectAccessServiceDep, ProjectRepoDep
 from ..projects.domain.entities import Project
 from ..projects.infra.repos import SqlProjectRepository
 from ..shared.dependencies import EventPublisherDep, SessionDep
@@ -88,7 +88,7 @@ def get_ticket_data_loader() -> TicketDataLoader:
     )
 
 
-def get_ticket_scope_service(membership_repo: MembershipRepoDep) -> TicketScopeService:
+def get_ticket_scope_service(membership_repo: ProjectMemberRepoDep) -> TicketScopeService:
     return TicketScopeService(project_membership_repo=membership_repo)
 
 

@@ -44,7 +44,7 @@ def stage_factory():
 
     def _make_stage(**kwargs) -> ProjectStage:
         name = kwargs.pop("name", "Test stage")
-        order = kwargs.pop("order", 1)
+        order = kwargs.pop("execution_order", 1)
 
         if not name.strip():
             name = "Test stage"

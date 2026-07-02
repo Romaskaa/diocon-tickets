@@ -12,7 +12,7 @@ from src.shared.schemas import Page
 from ..domain.authz import ProjectAuthZService
 from ..domain.entities import Project
 from ..domain.repos import ProjectMemberRepository, ProjectRepository
-from ..domain.services import create_project, generate_key_suggestions
+from ..domain.services import generate_key_suggestions
 from ..domain.vo import ProjectKey, ProjectRole
 from ..mappers import (
     map_project_stage_to_response,
@@ -51,10 +51,6 @@ class ProjectService:
         """
         Генерация списка альтернативных ключей проекта в стиле Jira.
         Для избежания коллизий при создании проекта.
-
-        Примеры:
-         - original_key = "WEB" -> ["WEB1", "WEB2", "WEB3", "WEB-1", "WEB-2", ...]
-         - original_key = "CRM" -> ["CRM1", "CRM2", "CRM3", ...]
         """
 
         candidates = generate_key_suggestions(
@@ -115,7 +111,7 @@ class ProjectService:
 
                 members = [owner]
                 return map_project_to_detailed_response(
-                    project, memberships=Page.create(
+                    project, members=Page.create(
                         members, total_items=len(members), page=1, size=1,
                     )
                 )
@@ -153,7 +149,7 @@ class ProjectService:
         Добавить новый этап в проект.
         """
 
-        project = await self._get_project_or_404(project_id)
+        project = await get_or_raise_404(self.project_repo.read, project_id, Project)
 
         permission = await self.authz_service.can_manage_project(
             subject=current_subject, project=project
@@ -164,23 +160,23 @@ class ProjectService:
         project.add_stage(
             name=data.name,
             description=data.description,
-            order=data.order,
+            execution_order=data.execution_order,
             planned_start=data.planned_start,
             planned_end=data.planned_end,
         )
         await self.project_repo.update(project)
-        await self.session.commit()
+        await finalize(self.uow, project, event_publisher=self.event_publisher)
 
         return map_project_to_response(project)
 
     async def reorder_stages(
-            self, project_id: UUID, new_order: list[UUID], current_subject: Subject
+            self, project_id: UUID, new_order: list[list[UUID]], current_subject: Subject
     ) -> ProjectResponse:
         """
         Изменить порядок проведения этапов.
         """
 
-        project = await self._get_project_or_404(project_id)
+        project = await get_or_raise_404(self.project_repo.read, project_id, Project)
 
         permission = await self.authz_service.can_manage_project(
             subject=current_subject, project=project
@@ -190,7 +186,7 @@ class ProjectService:
 
         project.reorder_stages(new_order)
         await self.project_repo.update(project)
-        await self.session.commit()
+        await self.uow.commit()
 
         return map_project_to_response(project)
 
@@ -198,10 +194,10 @@ class ProjectService:
             self, project_id: UUID, stage_id: UUID, current_subject: Subject
     ) -> ProjectResponse:
         """
-        Начать новую стадию проекта
+        Начать новую стадию проекта.
         """
 
-        project = await self._get_project_or_404(project_id)
+        project = await get_or_raise_404(self.project_repo.read, project_id, Project)
 
         permission = await self.authz_service.can_manage_project(
             subject=current_subject, project=project
@@ -209,9 +205,9 @@ class ProjectService:
         if not permission.allowed:
             raise PermissionDeniedError(permission.reason)
 
-        project.start_stage(stage_id=stage_id, started_by=current_subject.id)
+        project.start_stage(stage_id)
         await self.project_repo.update(project)
-        await self.session.commit()
+        await self.uow.commit()
 
         return map_project_to_response(project)
 
@@ -219,10 +215,10 @@ class ProjectService:
             self, project_id: UUID, stage_id: UUID, current_subject: Subject
     ) -> ProjectResponse:
         """
-        Успешно завершить стадию проекта
+        Успешно завершает стадию проекта.
         """
 
-        project = await self._get_project_or_404(project_id)
+        project = await get_or_raise_404(self.project_repo.read, project_id, Project)
 
         permission = await self.authz_service.can_manage_project(
             subject=current_subject, project=project
@@ -230,9 +226,9 @@ class ProjectService:
         if not permission.allowed:
             raise PermissionDeniedError(permission.reason)
 
-        project.complete_stage(stage_id=stage_id, completed_by=current_subject.id)
+        project.complete_stage(stage_id)
         await self.project_repo.update(project)
-        await self.session.commit()
+        await self.uow.commit()
 
         return map_project_to_response(project)
 
@@ -240,10 +236,10 @@ class ProjectService:
             self, project_id: UUID, stage_id: UUID, current_subject: Subject
     ) -> ProjectResponse:
         """
-        Пропустить стадию проекта
+        Пропустить этап проекта.
         """
 
-        project = await self._get_project_or_404(project_id)
+        project = await get_or_raise_404(self.project_repo.read, project_id, Project)
 
         permission = await self.authz_service.can_manage_project(
             subject=current_subject, project=project
@@ -251,9 +247,9 @@ class ProjectService:
         if not permission.allowed:
             raise PermissionDeniedError(permission.reason)
 
-        project.skip_stage(stage_id=stage_id, skipped_by=current_subject.id)
+        project.skip_stage(stage_id)
         await self.project_repo.update(project)
-        await self.session.commit()
+        await self.uow.commit()
 
         return map_project_to_response(project)
 
@@ -261,10 +257,10 @@ class ProjectService:
             self, project_id: UUID, stage_id: UUID, current_subject: Subject
     ) -> ProjectResponse:
         """
-        Удалить этап проекта
+        Удалить этап проекта.
         """
 
-        project = await self._get_project_or_404(project_id)
+        project = await get_or_raise_404(self.project_repo.read, project_id, Project)
 
         permission = await self.authz_service.can_manage_project(
             subject=current_subject, project=project
@@ -272,9 +268,9 @@ class ProjectService:
         if not permission.allowed:
             raise PermissionDeniedError(permission.reason)
 
-        project.remove_stage(stage_id=stage_id)
+        project.remove_stage(stage_id)
         await self.project_repo.update(project)
-        await self.session.commit()
+        await self.uow.commit()
 
         return map_project_to_response(project)
 
@@ -289,7 +285,7 @@ class ProjectService:
         Отредактировать содержание этапа
         """
 
-        project = await self._get_project_or_404(project_id)
+        project = await get_or_raise_404(self.project_repo.read, project_id, Project)
 
         permission = await self.authz_service.can_manage_project(
             subject=current_subject, project=project
@@ -308,7 +304,7 @@ class ProjectService:
             completion_criteria=data.completion_criteria,
         )
         await self.project_repo.update(project)
-        await self.session.commit()
+        await self.uow.commit()
 
         return map_project_stage_to_response(stage)
 
@@ -323,11 +319,7 @@ class ProjectService:
         Планирование расписания этапа проекта
         """
 
-        project = await self._get_project_or_404(project_id)
-
-        stage = project.find_stage(stage_id)
-        if stage is None:
-            raise NotFoundError(f"Project stage with ID {stage_id} does not exists in project")
+        project = await get_or_raise_404(self.project_repo.read, project_id, Project)
 
         permission = await self.authz_service.can_manage_project(
             subject=current_subject, project=project
@@ -335,8 +327,12 @@ class ProjectService:
         if not permission.allowed:
             raise PermissionDeniedError(permission.reason)
 
+        stage = project.find_stage(stage_id)
+        if stage is None:
+            raise NotFoundError(f"Project stage with ID {stage_id} does not exists in project")
+
         stage.establish_planned_schedule(start=data.planned_start, end=data.planned_end)
         await self.project_repo.update(project)
-        await self.session.commit()
+        await self.uow.commit()
 
         return map_project_stage_to_response(stage)

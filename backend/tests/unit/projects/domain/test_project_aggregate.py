@@ -91,7 +91,7 @@ class TestAddStage:
 
         assert len(project.stages) == 1
         assert project.stages[0].name == "First stage"
-        assert project.stages[0].order == 1
+        assert project.stages[0].execution_order == 1
         assert project.updated_at > old_updated_at
 
     def test_adding_multiple_stages_must_be_sorted(self, project_factory):
@@ -106,7 +106,7 @@ class TestAddStage:
         assert len(project.stages) == num_stages
         # Проверка порядка
         for order, stage in enumerate(project.stages, start=1):
-            assert stage.order == order
+            assert stage.execution_order == order
 
     def test_indicate_unoccupied_stage_order_success(self, project_factory):
         """
@@ -122,18 +122,18 @@ class TestAddStage:
             project.add_stage(name=f"Stage {i}")
 
         stage_order = 7
-        project.add_stage(name="Final stage", order=7)
+        project.add_stage(name="Final stage", execution_order=7)
         assert len(project.stages) == num_stages + 1
-        sorted_stages = sorted(project.stages, key=lambda s: s.order)
+        sorted_stages = sorted(project.stages, key=lambda s: s.execution_order)
         assert project.stages == sorted_stages
-        assert project.stages[-1].order == stage_order
+        assert project.stages[-1].execution_order == stage_order
 
     @pytest.mark.parametrize("wrong_order", [0, -1, -10, 0.9])
     def test_failed_when_order_is_less_then_one(self, project_factory, wrong_order):
         project = project_factory()
 
-        with pytest.raises(ValueError, match="Stage order must be >= 1"):
-            project.add_stage(name="Wrong stage", order=wrong_order)
+        with pytest.raises(ValueError, match="Stage execution_order must be >= 1"):
+            project.add_stage(name="Wrong stage", execution_order=wrong_order)
 
     def test_failed_when_order_already_exists(self, project_factory):
         project = project_factory()
@@ -142,7 +142,7 @@ class TestAddStage:
             project.add_stage(name=f"Stage {i}")
 
         with pytest.raises(InvariantViolationError, match="already exists"):
-            project.add_stage(name="Exists stage", order=3)
+            project.add_stage(name="Exists stage", execution_order=3)
 
 
 class TestReorderStages:
@@ -180,7 +180,7 @@ class TestReorderStages:
     def test_failed_when_unknown_ids_in_new_order(self, project_with_stages_factory):
         project = project_with_stages_factory(num_stages=3)
 
-        with pytest.raises(ValueError, match="Invalid stage IDs in new order"):
+        with pytest.raises(ValueError, match="Invalid stage IDs in new execution_order"):
             project.reorder_stages([uuid4(), uuid4(), uuid4()])
 
 

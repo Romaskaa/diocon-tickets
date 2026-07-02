@@ -9,23 +9,23 @@ from src.shared.schemas import Page
 from .dependencies import (
     MyProjectsDep,
     ProjectDep,
-    ProjectMembershipServiceDep,
-    ProjectPageDep,
+    ProjectMemberServiceDep,
     ProjectServiceDep,
+    ProjectsPageDep,
 )
+from .domain.services import generate_project_key
 from .schemas import (
     KeyCheckResult,
     NewProjectStagesOrder,
     ProjectCreate,
-    ProjectMembershipCreate,
-    ProjectMembershipResponse,
+    ProjectMemberCreate,
+    ProjectMemberResponse,
     ProjectResponse,
     ProjectStageCreate,
     ProjectStagePlan,
     ProjectStageResponse,
     ProjectStageUpdate,
 )
-from .utils import generate_project_key
 
 router = APIRouter(prefix="/projects", tags=["Проекты"])
 
@@ -35,7 +35,7 @@ router = APIRouter(prefix="/projects", tags=["Проекты"])
     status_code=status.HTTP_200_OK,
     response_model=dict[str, str],
     summary="Предлагает ключ проекта",
-    description="Генерирует человекочитаемый ключ проекта, например - `CP`"
+    description="Генерирует человекочитаемый ключ проекта, например - `PRJ`"
 )
 def get_key_suggestion(
         name: str = Query(..., description="Наименование проекта"),
@@ -76,14 +76,7 @@ async def create_project(
     path="/my",
     status_code=status.HTTP_200_OK,
     response_model=Page[ProjectResponse],
-    summary="Получение моих проектов",
-    description="""\
-    Получение проектов пользователя в зависимости от параметра project_role:
-
-     - `owner` - проекты, где пользователь является владельцем.
-     - `member` - пользователь любой другой участник, кроме владельца.
-     - `all` - любой участник (на важно какая роль).
-    """,
+    summary="Мои проекты",
 )
 async def get_my_projects(my_projects: MyProjectsDep) -> Page[ProjectResponse]:
     return my_projects
@@ -105,29 +98,29 @@ async def get_project(project: ProjectDep) -> ProjectResponse:
     status_code=status.HTTP_200_OK,
     response_model=Page[ProjectResponse],
     dependencies=[Depends(require_role(SUPPORT_MANAGER_OR_ABOVE))],
-    summary="Получить все проекты"
+    summary="Пагинация проектов"
 )
-async def get_projects(page: ProjectPageDep) -> Page[ProjectResponse]:
+async def get_projects(page: ProjectsPageDep) -> Page[ProjectResponse]:
     return page
 
 
 @router.post(
-    path="/{project_id}/memberships",
+    path="/{project_id}/members",
     status_code=status.HTTP_201_CREATED,
-    response_model=ProjectMembershipResponse,
+    response_model=ProjectMemberResponse,
     summary="Добавить участника в проект"
 )
-async def create_project_membership(
+async def create_project_member(
         project_id: UUID,
-        data: ProjectMembershipCreate,
+        data: ProjectMemberCreate,
         current_subject: CurrentSubjectDep,
-        service: ProjectMembershipServiceDep,
-) -> ProjectMembershipResponse:
+        service: ProjectMemberServiceDep,
+) -> ProjectMemberResponse:
     return await service.add_member(project_id, data, current_subject)
 
 
 @router.delete(
-    path="/{project_id}/memberships/{user_id}",
+    path="/{project_id}/members/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Удалить участника из проекта"
 )
@@ -135,7 +128,7 @@ async def delete_project_membership(
         project_id: UUID,
         user_id: UUID,
         current_subject: CurrentSubjectDep,
-        service: ProjectMembershipServiceDep,
+        service: ProjectMemberServiceDep,
 ) -> None:
     return await service.remove_member(project_id, user_id, current_subject)
 
@@ -150,7 +143,7 @@ async def create_project_stage(
         project_id: UUID,
         data: ProjectStageCreate,
         current_subject: CurrentSubjectDep,
-        service: ProjectMembershipServiceDep,
+        service: ProjectMemberServiceDep,
 ) -> ProjectResponse:
     return await service.add_member(project_id, data, current_subject)
 

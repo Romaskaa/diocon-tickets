@@ -1,17 +1,18 @@
-from ..shared.schemas import Page
+from src.shared.schemas import Page
+
 from .domain.entities import Project, ProjectMember, ProjectStage
 from .schemas import (
     ProjectDetailedResponse,
-    ProjectMembershipResponse,
+    ProjectMemberResponse,
     ProjectResponse,
     ProjectStageResponse,
 )
 
 
-def map_membership_to_response(membership: ProjectMember) -> ProjectMembershipResponse:
-    return ProjectMembershipResponse(
+def map_member_to_response(membership: ProjectMember) -> ProjectMemberResponse:
+    return ProjectMemberResponse(
         project_id=membership.project_id,
-        project_role=membership.project_role,
+        project_roles=set(membership.project_roles),
         user_id=membership.user_id,
         created_by=membership.created_by,
         created_at=membership.created_at,
@@ -26,7 +27,7 @@ def map_project_stage_to_response(stage: ProjectStage) -> ProjectStageResponse:
         updated_at=stage.updated_at,
         project_id=stage.project_id,
         name=stage.name,
-        order=stage.order,
+        execution_order=stage.execution_order,
         status=stage.status,
         planned_start=stage.planned_start,
         planned_end=stage.planned_end,
@@ -52,13 +53,12 @@ def map_project_to_response(project: Project) -> ProjectResponse:
         counterparty_id=project.counterparty_id,
         created_by=project.created_by,
         status=project.status,
-        current_stage_id=project.current_stage_id,
         stages=[map_project_stage_to_response(stage) for stage in project.stages],
     )
 
 
 def map_project_to_detailed_response(
-        project: Project, memberships: Page[ProjectMember],
+        project: Project, members: Page[ProjectMember],
 ) -> ProjectDetailedResponse:
     return ProjectDetailedResponse(
         id=project.id,
@@ -71,7 +71,6 @@ def map_project_to_detailed_response(
         counterparty_id=project.counterparty_id,
         created_by=project.created_by,
         status=project.status,
-        current_stage_id=project.current_stage_id,
         stages=[map_project_stage_to_response(stage) for stage in project.stages],
-        memberships=memberships.to_response(map_membership_to_response),
+        members=members.to_response(map_member_to_response),
     )

@@ -14,7 +14,7 @@ class ProjectMemberOrm(Base):
 
     project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.id"), unique=False)
     user_id: Mapped[UUID]
-    project_roles: Mapped[set[ProjectRole]] = mapped_column(JSONB)
+    project_roles: Mapped[list[ProjectRole]] = mapped_column(JSONB)
     created_by: Mapped[UUID]
 
     project: Mapped["ProjectOrm"] = relationship(back_populates="members")
@@ -31,7 +31,7 @@ class ProjectStageOrm(Base):
 
     project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.id"), unique=False)
     name: Mapped[str]
-    order: Mapped[int]
+    execution_order: Mapped[int]
 
     status: Mapped[ProjectStageStatus] = mapped_column(Enum(ProjectStageStatus))
 
@@ -48,8 +48,7 @@ class ProjectStageOrm(Base):
     project: Mapped["ProjectOrm"] = relationship(back_populates="stages")
 
     __table_args__ = (
-        UniqueConstraint("project_id", "order", name="uq_project_stage_order"),
-        Index("ix_project_stages_project_order", "project_id", "order"),
+        Index("ix_project_stages_project_order", "project_id", "execution_order"),
         Index("ix_project_stages_status", "status"),
         Index("ix_project_stages_responsible", "responsible_id"),
     )
@@ -68,9 +67,6 @@ class ProjectOrm(Base):
     owner_id: Mapped[UUID]
     created_by: Mapped[UUID]
 
-    current_stage_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("project_stages.id"), nullable=True
-    )
     stages: Mapped[list["ProjectStageOrm"]] = relationship(
         back_populates="project", lazy="selectin", uselist=True, cascade="all, delete-orphan"
     )
