@@ -19,7 +19,9 @@ class IsCustomerRule:
     def check(self) -> PermissionResult:
         for role in self.subject.roles:
             if role.is_customer():
-                return PermissionResult(False, "Only customer can leave feedback")
+                return PermissionResult(True)
+        
+        return PermissionResult(False, "Only customer can leave feedback")
             
 
 class IsSupportRule:
@@ -70,7 +72,7 @@ class IsTicketClosedRule:
 
     def check(self) -> PermissionResult:
         if self.ticket.status == TicketStatus.CLOSED:
-            PermissionResult(True)
+            return PermissionResult(True)
 
         return PermissionResult(False, "Feedback can be left only for closed tickets")
     

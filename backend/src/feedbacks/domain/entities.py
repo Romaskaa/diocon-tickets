@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from uuid import UUID
+from typing import Self
 
 from src.shared.domain.entities import AggregateRoot
 from src.shared.utils.time import current_datetime
