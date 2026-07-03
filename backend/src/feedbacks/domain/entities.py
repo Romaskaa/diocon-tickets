@@ -6,27 +6,25 @@ from src.shared.domain.entities import AggregateRoot
 from src.shared.utils.time import current_datetime
 
 from .events import FeedbackCreated
+from .vo import FeedbackRating
 
 
 @dataclass(kw_only=True)
 class Feedback(AggregateRoot):
     """
-    Отзыв клиента о качестве облуживания по закрутому тикету.
+    Отзыв клиента о качестве обслуживания по закрутому тикету.
     """
     
     ticket_id: UUID
     author_id: UUID
-    rating: int
+    rating: FeedbackRating
     comment: str | None = None
 
     def __post_init__(self) -> None:
         """
-        Проверка инвариантов отзыва после создания объекта.
-        Нормализует комментарий и гарантирует, что оценка находится
-        в допустимом диапазоне.
+        Нормализует комментарий отзыва после создания объекта.
         """
 
-        self._validate_rating(self.rating)
         self.comment = self._normalize_comment(self.comment)
 
     @classmethod
@@ -45,7 +43,7 @@ class Feedback(AggregateRoot):
         feedback = cls(
             ticket_id=ticket_id,
             author_id=author_id,
-            rating=rating,
+            rating=FeedbackRating(rating),
             comment=comment,
         )
 
@@ -54,7 +52,7 @@ class Feedback(AggregateRoot):
                 feedback_id=feedback.id,
                 ticket_id=ticket_id,
                 author_id=author_id,
-                rating=feedback.rating,
+                rating=feedback.rating.value,
                 comment=feedback.comment,
             )
         )
@@ -74,10 +72,12 @@ class Feedback(AggregateRoot):
 
         is_edited = False
 
-        if rating is not None and rating != self.rating:
-            self._validate_rating(rating)
-            self.rating = rating
-            is_edited = True
+        if rating is not None:
+            new_rating = FeedbackRating(rating)
+
+            if new_rating != self.rating:
+                self.rating = new_rating
+                is_edited = True
 
         if comment is not None:
             normalized_comment = self._normalize_comment(comment)
@@ -99,15 +99,6 @@ class Feedback(AggregateRoot):
         
         self.deleted_at = current_datetime()
         self.updated_at = current_datetime()
-
-    @staticmethod
-    def _validate_rating(rating: int) -> None:
-        """
-        Проверяет, что оценка находиться в диапазоне от 1 до 5.
-        """
-
-        if rating < 1 or rating > 5:
-            raise ValueError("Feedback ratings must be between 1 and 5")
         
     @staticmethod
     def _normalize_comment(comment: str | None) -> str | None:

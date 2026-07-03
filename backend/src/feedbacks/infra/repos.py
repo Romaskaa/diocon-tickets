@@ -7,6 +7,7 @@ from src.shared.schemas import Page, Pagination
 
 from ..domain.entities import Feedback
 from ..domain.repos import FeedbackFilters
+from ..domain.vo import FeedbackRating
 from .models import FeedbackOrm
 
 
@@ -24,7 +25,7 @@ class FeedbackMapper(ModelMapper[Feedback, FeedbackOrm]):
             deleted_at=model.deleted_at,
             ticket_id=model.ticket_id,
             author_id=model.author_id,
-            rating=model.rating, 
+            rating=FeedbackRating(model.rating), 
             comment=model.comment,
         )
     
@@ -37,7 +38,7 @@ class FeedbackMapper(ModelMapper[Feedback, FeedbackOrm]):
             deleted_at=entity.deleted_at,
             ticket_id=entity.ticket_id,
             author_id=entity.author_id,
-            rating=entity.rating,
+            rating=entity.rating.value,
             comment=entity.comment,
         )
     
