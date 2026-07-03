@@ -22,10 +22,11 @@ class Feedback(AggregateRoot):
 
     def __post_init__(self) -> None:
         """
-        Нормализует комментарий отзыва после создания объекта.
+        Проверяет, что комментарий отзыва не пустой, если он указан.
         """
 
-        self.comment = self._normalize_comment(self.comment)
+        if self.comment is not None and not self.comment.strip():
+            raise ValueError("Feedback comment cannot be empty")
 
     @classmethod
     def create(
@@ -39,6 +40,8 @@ class Feedback(AggregateRoot):
         """
         Создаёт новый отзыв клиента.
         """
+
+        comment = None if comment is None else comment.strip()
 
         feedback = cls(
             ticket_id=ticket_id,
@@ -80,10 +83,13 @@ class Feedback(AggregateRoot):
                 is_edited = True
 
         if comment is not None:
-            normalized_comment = self._normalize_comment(comment)
+            new_comment = comment.strip()
 
-            if normalized_comment != self.comment:
-                self.comment = normalized_comment
+            if not new_comment:
+                raise ValueError("Feedback comment cannot be empty")
+
+            if new_comment != self.comment:
+                self.comment = new_comment
                 is_edited = True
 
         if is_edited:
@@ -99,15 +105,3 @@ class Feedback(AggregateRoot):
         
         self.deleted_at = current_datetime()
         self.updated_at = current_datetime()
-        
-    @staticmethod
-    def _normalize_comment(comment: str | None) -> str | None:
-        """
-        Убирает лишние пробелы из комментария.
-        """
-
-        if comment is None:
-            return None
-        
-        normalized = comment.strip()
-        return normalized or None
