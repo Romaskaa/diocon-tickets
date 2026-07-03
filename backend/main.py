@@ -27,6 +27,7 @@ from src.shared.utils.cli import run_cli_command
 from src.tasks.infra.handlers import router as task_broker_router
 from src.tasks.router import router as task_router
 from src.tickets.router import router as tickets_router
+from src.feedbacks.router import router as feedback_router
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,7 @@ router.include_router(shared_router)
 router.include_router(product_router)
 router.include_router(project_router)
 router.include_router(task_router)
+router.include_router(feedback_router)
 
 app.include_router(router)
 app.include_router(broker_router)
