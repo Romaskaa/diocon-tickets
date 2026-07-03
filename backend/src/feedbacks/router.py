@@ -4,11 +4,11 @@ from fastapi import APIRouter, status
 
 from src.iam.dependencies import CurrentSubjectDep
 from src.shared.dependencies import PaginationDep
+from src.shared.schemas import Page
 
 from .dependencies import FeedbackFiltersDep, FeedbackServiceDep
 from .schemas import (
     FeedbackCreate,
-    FeedbackPageResponse,
     FeedbackResponse,
     FeedbackUpdate,
 )
@@ -55,7 +55,7 @@ async def get_feedback_by_ticket(
 @router.get(
     path="/feedbacks",
     status_code=status.HTTP_200_OK,
-    response_model=FeedbackPageResponse,
+    response_model=Page[FeedbackResponse],
     summary="Получить список отзывов",
 )
 async def get_feedbacks(
@@ -63,7 +63,7 @@ async def get_feedbacks(
     filters: FeedbackFiltersDep,
     current_subject: CurrentSubjectDep,
     service: FeedbackServiceDep,
-) -> FeedbackPageResponse:
+) -> Page[FeedbackResponse]:
     return await service.get_feedbacks(
         pagination=pagination,
         filters=filters,

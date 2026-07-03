@@ -5,7 +5,7 @@ from src.iam.domain.exceptions import PermissionDeniedError
 from src.shared.domain.events import EventPublisher
 from src.shared.domain.exceptions import AlreadyExistsError, NotFoundError
 from src.shared.domain.repos import UnitOfWork, finalize, get_or_raise_404
-from src.shared.schemas import Pagination
+from src.shared.schemas import Page, Pagination
 from src.tickets.domain.entities import Ticket
 from src.tickets.domain.repos import TicketRepository
 
@@ -13,7 +13,7 @@ from ..domain.authz import FeedbackAuthZService
 from ..domain.entities import Feedback
 from ..domain.repos import FeedbackFilters, FeedbackRepository
 from ..mappers import map_feedback_page_to_response, map_feedback_to_response
-from ..schemas import FeedbackCreate, FeedbackPageResponse, FeedbackResponse, FeedbackUpdate
+from ..schemas import FeedbackCreate, FeedbackResponse, FeedbackUpdate
 
 
 class FeedbackService:
@@ -97,7 +97,7 @@ class FeedbackService:
             pagination: Pagination,
             filters: FeedbackFilters,
             current_subject: Subject,
-    ) -> FeedbackPageResponse:
+    ) -> Page[FeedbackResponse]:
         """
         Получить список активных отзывов.
         """

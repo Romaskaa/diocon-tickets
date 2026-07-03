@@ -3,8 +3,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from src.shared.schemas import Page
-
 
 class FeedbackCreate(BaseModel):
     """
@@ -54,6 +52,3 @@ class FeedbackResponse(BaseModel):
     author_id: UUID = Field(..., description="ID клиента, который оставил отзыв")
     rating: int = Field(..., ge=1, le=5, description="Оценка качества обслуживания")
     comment: str | None = Field(None, description="Комментарий клиента")
-
-
-FeedbackPageResponse = Page[FeedbackResponse]
