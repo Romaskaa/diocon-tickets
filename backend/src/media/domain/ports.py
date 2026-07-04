@@ -3,7 +3,8 @@ from typing import Any, BinaryIO, Protocol
 from collections.abc import AsyncIterator
 from uuid import UUID
 
-from ...shared.domain.repo import Repository
+from src.shared.domain.repos import Repository
+
 from .entities import Attachment
 
 

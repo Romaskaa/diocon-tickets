@@ -62,7 +62,7 @@ class TicketCreatedPolicy:
                 targets.update({support.id for support in supports})
 
         return list(targets)
-    
+
 
 class TicketAssignedPolicy:
     async def get_targets(self, event: TicketAssigned) -> list[UUID]:

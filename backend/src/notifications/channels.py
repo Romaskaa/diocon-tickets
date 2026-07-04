@@ -4,9 +4,10 @@ import logging
 
 from faststream.rabbit import RabbitBroker
 
-from ..iam.domain.repos import UserRepository
-from ..shared.domain.exceptions import EmailSendingFailedError
-from ..shared.infra.mail import SmtpMailSender
+from src.iam.domain.repos import UserRepository
+from src.shared.domain.exceptions import EmailSendingFailedError
+from src.shared.infra.mail import SmtpMailSender
+
 from .domain.entities import Notification
 from .domain.exceptions import NotificationSendingFailedError
 from .domain.vo import ChannelType, NotificationType

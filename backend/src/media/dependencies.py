@@ -2,8 +2,9 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from ..core.settings import S3_BUCKET_NAME, settings
-from ..shared.dependencies import SessionDep
+from src.core.settings import S3_BUCKET_NAME, settings
+from src.shared.dependencies import SessionDep
+
 from .domain.ports import AttachmentRepository, Storage
 from .infra.repo import SqlAttachmentRepository
 from .infra.s3 import S3Storage
@@ -19,7 +20,7 @@ def get_storage() -> Storage:
     )
 
 
-def get_attachment_repo(session: SessionDep) -> AttachmentRepository:
+def get_attachment_repo(session: SessionDep) -> SqlAttachmentRepository:
     return SqlAttachmentRepository(session)
 
 

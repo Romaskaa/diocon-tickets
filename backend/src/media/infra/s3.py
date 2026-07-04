@@ -5,7 +5,8 @@ from contextlib import asynccontextmanager
 from aiobotocore.session import get_session
 from botocore.exceptions import ClientError
 
-from ...shared.domain.exceptions import NotFoundError
+from src.shared.domain.exceptions import NotFoundError
+
 from ..domain.ports import Storage
 
 

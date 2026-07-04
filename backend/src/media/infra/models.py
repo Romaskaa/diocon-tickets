@@ -4,7 +4,7 @@ from uuid import UUID
 from sqlalchemy import DateTime
 from sqlalchemy.orm import Mapped, mapped_column
 
-from ...core.database import Base
+from src.core.database import Base
 
 
 class AttachmentOrm(Base):

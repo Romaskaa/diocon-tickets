@@ -1,7 +1,8 @@
 from uuid import UUID
 
-from ..core.settings import settings
-from ..tickets.domain.events import TicketAssigned, TicketCreated
+from src.core.settings import settings
+from src.tickets.domain.events import TicketAssigned, TicketCreated
+
 from .domain.entities import Notification
 from .domain.vo import NotificationType
 

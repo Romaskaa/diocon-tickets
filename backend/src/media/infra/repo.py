@@ -2,7 +2,8 @@ from uuid import UUID
 
 from sqlalchemy import select
 
-from ...shared.infra.repos import ModelMapper, SqlAlchemyRepository
+from src.shared.infra.repos import ModelMapper, SqlAlchemyRepository
+
 from ..domain.entities import Attachment
 from .models import AttachmentOrm
 
