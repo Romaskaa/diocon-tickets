@@ -61,7 +61,7 @@ def build_invitation_mail(invitation: Invitation) -> dict[str, Any]:
     invite_url = f"{settings.frontend_url}/auth/invite/accept?token={invitation.token}"
     context = {
         "email": invitation.email,
-        "granted_roles": ...,
+        "granted_roles": invitation.granted_roles,
         "invite_url": invite_url,
         "expires_in_days": INVITATION_EXPIRE_IN_DAYS,
         "app_name": settings.app.name,

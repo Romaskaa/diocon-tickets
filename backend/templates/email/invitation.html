@@ -9,20 +9,32 @@
     .container { max-width: 600px; margin: 0 auto; background: white; padding: 32px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
     .btn { display: inline-block; background: #0066cc; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 20px 0; }
     .footer { margin-top: 40px; font-size: 12px; color: #777; text-align: center; }
+    .role-list { list-style: none; padding: 0; margin: 10px 0; }
+    .role-list li { background: #e9edf4; display: inline-block; padding: 4px 14px; border-radius: 16px; margin: 2px 6px 2px 0; font-size: 0.9em; }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Здравствуйте!</h1>
-    <p>Вас пригласили присоединиться к системе тикетов <strong>{{ app_name }}</strong> в роли <strong>{{ role }}</strong>.</p>
+    <p>Вас пригласили присоединиться к системе <strong>{{ app_name }}</strong>.</p>
+
+    <p>Вам назначены следующие роли:</p>
+    <ul class="role-list">
+      {% for role in granted_roles %}
+        <li>{{ role }}</li>
+      {% endfor %}
+    </ul>
 
     <p>Это даст вам возможность:</p>
     <ul>
-      {% if role == "End User" or role == "Customer Admin" %}
+      {% if 'end_user' in granted_roles or 'customer_admin' in granted_roles %}
         <li>Создавать и отслеживать заявки</li>
         <li>Общаться с поддержкой</li>
-        {% if role == "Customer Admin" %}<li>Управлять пользователями своей организации</li>{% endif %}
-      {% else %}
+        {% if 'customer_admin' in granted_roles %}
+          <li>Управлять пользователями своей организации</li>
+        {% endif %}
+      {% endif %}
+      {% if 'agent' in granted_roles or 'admin' in granted_roles %}
         <li>Работать с заявками клиентов</li>
         <li>Отвечать и управлять статусами</li>
       {% endif %}
