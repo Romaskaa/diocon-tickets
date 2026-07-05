@@ -36,7 +36,7 @@ class IsProjectStaffRule:
         )
 
 
-class ProjectMemberExistsRule:
+class IsMemberExistsRule:
 
     def __init__(self, member: ProjectMember | None) -> None:
         self.member = member
@@ -99,7 +99,7 @@ class GrantProjectRoleRule:
 
         allowed_roles = set()
         for invitee_role in self.invitee.roles:
-            if invitee_role.is_customer():
+            if invitee_role.is_customer:
                 allowed_roles.update(ProjectRole.customer_roles())
             else:
                 roles = ProjectRole.staff_roles() | ProjectRole.customer_roles()

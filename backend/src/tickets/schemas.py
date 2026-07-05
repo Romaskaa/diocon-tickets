@@ -3,8 +3,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, NonNegativeFloat, NonNegativeInt
 
-from ..iam.domain.vo import UserRole
-from ..media.schemas import AttachmentResponse
+from src.iam.domain.vo import UserRole
+from src.media.schemas import AttachmentResponse
+
 from .domain.vo import CommentType, Priority, ReactionType, TicketStatus, TicketType
 
 
@@ -43,21 +44,6 @@ class ReactionResponse(BaseModel):
 
 class CommentWithReactionsResponse(CommentResponse, ReactionResponse):
     """Комментарий с реакциями"""
-
-
-class HistoryEntryResponse(BaseModel):
-    """Схема записи истории изменений"""
-
-    created_at: datetime = Field(..., description="Дата записи")
-    actor_id: UUID = Field(..., description="ID пользователя, который внёс изменения")
-    action: str = Field(
-        ...,
-        description="Действие, которое было произведено над тикетом",
-        examples=["created", "assigned", "status_changed"]
-    )
-    old_value: str | None = Field(None, description="Старое значение (до изменений)")
-    new_value: str | None = Field(None, description="Новое значение")
-    description: str = Field(..., description="Человеко-читаемое описание действия")
 
 
 class Tag(BaseModel):
@@ -154,9 +140,6 @@ class TicketResponse(TicketBase):
 
     attachments: list[AttachmentResponse] = Field(
         default_factory=list, description="Прикреплённые файлы"
-    )
-    history: list[HistoryEntryResponse] = Field(
-        default_factory=list, description="История работы с тикетом"
     )
 
 

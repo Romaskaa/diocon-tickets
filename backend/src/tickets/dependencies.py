@@ -5,17 +5,21 @@ from uuid import UUID
 
 from fastapi import Depends, Query
 
-from ..core.database import session_factory
-from ..crm.dependencies import CounterpartyRepoDep
-from ..crm.domain.entities import Counterparty
-from ..crm.infra.repos import SqlCounterpartyRepository
-from ..iam.dependencies import UserRepoDep
-from ..iam.domain.entities import User
-from ..iam.infra.repos import SqlUserRepository
-from ..projects.dependencies import ProjectMemberRepoDep, ProjectAccessServiceDep, ProjectRepoDep
-from ..projects.domain.entities import Project
-from ..projects.infra.repos import SqlProjectRepository
-from ..shared.dependencies import EventPublisherDep, SessionDep
+from src.activity_logs.dependencies import ActivityLogRecorderDep
+from src.core.database import session_factory
+from src.crm.dependencies import CounterpartyRepoDep
+from src.crm.domain.entities import Counterparty
+from src.crm.infra.repos import SqlCounterpartyRepository
+from src.iam.dependencies import UserRepoDep
+from src.iam.domain.entities import User
+from src.iam.infra.repos import SqlUserRepository
+from src.projects.dependencies import ProjectMemberRepoDep, ProjectRepoDep
+from src.projects.domain.entities import Project
+from src.projects.infra.repos import SqlProjectRepository
+from src.shared.dependencies import EventPublisherDep, SessionDep, PaginationDep
+from src.shared.schemas import Page
+
+from .domain.authz import TicketAuthZService
 from .domain.repos import CommentRepository, ReactionRepository, TicketFilters, TicketRepository
 from .domain.services import TicketScopeService
 from .domain.vo import Priority, TicketStatus, TicketType
@@ -41,27 +45,35 @@ CommentRepoDep = Annotated[CommentRepository, Depends(get_comment_repo)]
 ReactionRepoDep = Annotated[ReactionRepository, Depends(get_reaction_repo)]
 
 
+def get_ticket_authz_service(member_repo: ProjectMemberRepoDep) -> TicketAuthZService:
+    return TicketAuthZService(member_repo)
+
+
+TicketAuthZServiceDep = Annotated[TicketAuthZService, Depends(get_ticket_authz_service)]
+
+
 def get_ticket_service(
         session: SessionDep,
         counterparty_repo: CounterpartyRepoDep,
         ticket_repo: TicketRepoDep,
         project_repo: ProjectRepoDep,
-        project_access_service: ProjectAccessServiceDep,
         user_repo: UserRepoDep,
+        ticket_authz_service: TicketAuthZServiceDep,
+        activity_log_recorder: ActivityLogRecorderDep,
         event_publisher: EventPublisherDep
 ) -> TicketService:
     return TicketService(
-        session=session,
+        uow=session,
         counterparty_repo=counterparty_repo,
         ticket_repo=ticket_repo,
         project_repo=project_repo,
-        project_access_service=project_access_service,
         user_repo=user_repo,
+        ticket_authz_service=ticket_authz_service,
+        activity_log_recorder=activity_log_recorder,
         event_publisher=event_publisher
     )
 
 
-# Функции для пакетной загрузки данных
 async def fetch_users(user_ids: list[UUID]) -> list[User]:
     async with session_factory() as session:
         user_repo = SqlUserRepository(session)
@@ -173,3 +185,6 @@ def get_ticket_filters(
 
 
 TicketFiltersDep = Annotated[TicketFilters, Depends(get_ticket_filters)]
+
+
+async def paginate_my_tickets(pagination: PaginationDep, ticket_)

@@ -20,7 +20,7 @@ class NotificationFactory:
                 type=NotificationType.TICKET_CREATED,
                 data={
                     "ticket_id": f"{event.ticket_id}",
-                    "ticket_number": event.number,
+                    "number": event.number,
                     "title": event.title,
                     "ticket_title": event.title,
                     "ticket_url": f"{settings.frontend_url}/tickets/{event.number}",
@@ -43,7 +43,7 @@ class NotificationFactory:
                 type=NotificationType.TICKET_ASSIGNED,
                 data={
                     "ticket_id": f"{event.ticket_id}",
-                    "ticket_number": event.number,
+                    "number": event.number,
                     "title": event.title,
                     "ticket_title": event.title,
                     "ticket_url": f"{settings.frontend_url}/tickets/{event.number}",

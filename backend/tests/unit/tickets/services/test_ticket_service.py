@@ -34,7 +34,7 @@ def ticket_service(
         event_publisher,
 ):
     return TicketService(
-        session=mock_session,
+        uow=mock_session,
         ticket_repo=fake_ticket_repo,
         project_repo=fake_project_repo,
         project_access_service=project_access_service,
@@ -82,7 +82,7 @@ async def created_project(counterparty_id, fake_project_repo):
 @pytest.fixture
 async def created_ticket(fake_ticket_repo, current_support_agent):
     ticket = Ticket.create(
-        ticket_number=TicketNumber("TEST-26-00000001"),
+        number=TicketNumber("TEST-26-00000001"),
         title="Test ticket",
         description="This ticket created for test",
         reporter_id=current_support_agent.user_id,
@@ -436,7 +436,7 @@ class TestAssignTo:
         Успешное назначение исполнителя на тикет
         """
 
-        response = await ticket_service.assign_to(
+        response = await ticket_service.assign(
             ticket_id=ticket_in_open.id,
             assignee_id=current_support_agent.user_id,
             current_user=current_support_agent,
@@ -470,7 +470,7 @@ class TestAssignTo:
         )
         await fake_membership_repo.create(membership)
 
-        response = await ticket_service.assign_to(
+        response = await ticket_service.assign(
             ticket_id=opened_ticket_in_project.id,
             assignee_id=current_support_agent.user_id,
             current_user=current_support_agent,
@@ -491,7 +491,7 @@ class TestAssignTo:
         """
 
         with pytest.raises(PermissionDeniedError):
-            await ticket_service.assign_to(
+            await ticket_service.assign(
                 ticket_id=ticket_in_open.id,
                 assignee_id=current_customer.user_id,
                 current_user=current_support_agent,
@@ -527,7 +527,7 @@ class TestAssignTo:
         await fake_membership_repo.create(customer)
 
         with pytest.raises(PermissionDeniedError):
-            await ticket_service.assign_to(
+            await ticket_service.assign(
                 ticket_id=opened_ticket_in_project.id,
                 assignee_id=current_customer.user_id,
                 current_user=current_support_agent,
@@ -541,7 +541,7 @@ class TestAssignTo:
 
         ticket_id = uuid4()
         with pytest.raises(NotFoundError, match=f"Ticket with ID {ticket_id} not found"):
-            await ticket_service.assign_to(
+            await ticket_service.assign(
                 ticket_id=ticket_id,
                 assignee_id=current_support_agent.user_id,
                 current_user=current_support_agent,
@@ -558,7 +558,7 @@ class TestAssignTo:
         assignee_id = uuid4()
 
         with pytest.raises(NotFoundError, match=f"User with ID {assignee_id} not found"):
-            await ticket_service.assign_to(
+            await ticket_service.assign(
                 ticket_id=ticket_in_open.id,
                 assignee_id=assignee_id,
                 current_user=current_support_agent,

@@ -60,7 +60,7 @@ def ticket_number():
 @pytest.fixture
 def ticket_in_new(reporter_id, support_agent_id, ticket_number):
     return Ticket.create(
-        ticket_number=ticket_number,
+        number=ticket_number,
         reporter_id=reporter_id,
         created_by=support_agent_id,
         created_by_role=UserRole.SUPPORT_AGENT,
@@ -74,7 +74,7 @@ def ticket_in_new(reporter_id, support_agent_id, ticket_number):
 @pytest.fixture
 def ticket_in_pending_approval(reporter_id, ticket_number):
     return Ticket.create(
-        ticket_number=ticket_number,
+        number=ticket_number,
         reporter_id=reporter_id,
         created_by=reporter_id,
         created_by_role=UserRole.CUSTOMER,
@@ -88,7 +88,7 @@ def ticket_in_pending_approval(reporter_id, ticket_number):
 @pytest.fixture
 def ticket_in_open(reporter_id, support_agent_id, ticket_number):
     ticket = Ticket.create(
-        ticket_number=ticket_number,
+        number=ticket_number,
         reporter_id=reporter_id,
         created_by=support_agent_id,
         created_by_role=UserRole.SUPPORT_AGENT,
@@ -104,7 +104,7 @@ def ticket_in_open(reporter_id, support_agent_id, ticket_number):
 @pytest.fixture
 def ticket_in_progress(reporter_id, support_agent_id, ticket_number):
     ticket = Ticket.create(
-        ticket_number=ticket_number,
+        number=ticket_number,
         reporter_id=reporter_id,
         created_by=support_agent_id,
         created_by_role=UserRole.SUPPORT_AGENT,
@@ -123,7 +123,7 @@ def ticket_in_progress(reporter_id, support_agent_id, ticket_number):
 def test_empty_title_raises_error(reporter_id, created_by_id, ticket_number):
     with pytest.raises(ValueError, match="Title cannot be empty"):
         Ticket.create(
-            ticket_number=ticket_number,
+            number=ticket_number,
             reporter_id=reporter_id,
             created_by=created_by_id,
             created_by_role=UserRole.SUPPORT_AGENT,
@@ -138,7 +138,7 @@ class TestCreate:
 
     def test_create_ticket_minimal_success(self, reporter_id, created_by_id, ticket_number):
         ticket = Ticket.create(
-            ticket_number=ticket_number,
+            number=ticket_number,
             reporter_id=reporter_id,
             created_by=created_by_id,
             created_by_role=UserRole.SUPPORT_AGENT,
@@ -159,7 +159,7 @@ class TestCreate:
     ):
         with pytest.raises(InvariantViolationError) as exc:
             Ticket.create(
-                ticket_number=ticket_number,
+                number=ticket_number,
                 reporter_id=reporter_id,
                 created_by=created_by_id,
                 created_by_role=UserRole.CUSTOMER,
@@ -173,7 +173,7 @@ class TestCreate:
         reporter_id, created_by_id, ticket_number, project_id, counterparty_id
     ):
         ticket = Ticket.create(
-            ticket_number=ticket_number,
+            number=ticket_number,
             reporter_id=reporter_id,
             created_by=created_by_id,
             created_by_role=UserRole.SUPPORT_AGENT,
@@ -284,7 +284,7 @@ class TestAssignTo:
         """
 
         assignee_id = uuid.uuid4()
-        ticket_in_open.assign_to(assignee_id=assignee_id, assigned_by=support_agent_id)
+        ticket_in_open.assign(assignee_id=assignee_id, assigned_by=support_agent_id)
 
         assert ticket_in_open.assignee_id == assignee_id
         assert ticket_in_open.history[-1].action == "assigned"
@@ -296,11 +296,11 @@ class TestAssignTo:
         """
 
         first_support_agent_id = uuid.uuid4()
-        ticket_in_open.assign_to(assignee_id=first_support_agent_id, assigned_by=support_agent_id)
+        ticket_in_open.assign(assignee_id=first_support_agent_id, assigned_by=support_agent_id)
         old_updated_at = ticket_in_open.updated_at
 
         second_agent_id = uuid.uuid4()
-        ticket_in_open.assign_to(assignee_id=second_agent_id, assigned_by=first_support_agent_id)
+        ticket_in_open.assign(assignee_id=second_agent_id, assigned_by=first_support_agent_id)
 
         assert ticket_in_open.assignee_id == second_agent_id
         assert ticket_in_open.history[-1].action == "assigned"
@@ -312,11 +312,11 @@ class TestAssignTo:
         """
 
         assignee_id = uuid.uuid4()
-        ticket_in_open.assign_to(assignee_id=assignee_id, assigned_by=support_agent_id)
+        ticket_in_open.assign(assignee_id=assignee_id, assigned_by=support_agent_id)
         old_updated_at = ticket_in_open.updated_at
         old_ticket_history_length = len(ticket_in_open.history)
 
-        ticket_in_open.assign_to(assignee_id=assignee_id, assigned_by=support_agent_id)
+        ticket_in_open.assign(assignee_id=assignee_id, assigned_by=support_agent_id)
 
         assert len(ticket_in_open.history) == old_ticket_history_length
         assert ticket_in_open.assignee_id == assignee_id
@@ -338,7 +338,7 @@ class TestAssignTo:
         ticket_in_open.status = new_status
 
         with pytest.raises(InvalidStateError, match="Cannot assign ticket in status"):
-            ticket_in_open.assign_to(assignee_id=uuid.uuid4(), assigned_by=uuid.uuid4())
+            ticket_in_open.assign(assignee_id=uuid.uuid4(), assigned_by=uuid.uuid4())
 
         assert ticket_in_open.assignee_id is None
 
@@ -359,7 +359,7 @@ class TestEdit:
     @pytest.fixture
     def ticket(self, reporter_id, creator_id):
         return Ticket.create(
-            ticket_number=TicketNumber("WEB-26-00000005"),
+            number=TicketNumber("WEB-26-00000005"),
             reporter_id=reporter_id,
             created_by=creator_id,
             created_by_role=UserRole.CUSTOMER,
@@ -450,7 +450,7 @@ class TestArchive:
     @pytest.fixture
     def created_ticket(self):
         return Ticket.create(
-            ticket_number=TicketNumber("WEB-26-00000005"),
+            number=TicketNumber("WEB-26-00000005"),
             reporter_id=uuid.uuid4(),
             created_by=uuid.uuid4(),
             created_by_role=UserRole.CUSTOMER,

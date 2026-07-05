@@ -53,6 +53,10 @@ class UserRole(StrEnum):
         }
 
     @classmethod
+    def support_roles(cls) -> set[Self]:
+        return {cls.SUPPORT_AGENT, cls.SUPPORT_MANAGER}
+
+    @classmethod
     def customer_roles(cls) -> set[Self]:
         return {cls.CUSTOMER, cls.CUSTOMER_ADMIN}
 

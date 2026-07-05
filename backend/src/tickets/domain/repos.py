@@ -4,8 +4,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from ...shared.domain.repo import Repository
-from ...shared.schemas import Page, Pagination
+from src.shared.domain.repos import Repository
+from src.shared.schemas import Page, Pagination
+
 from .entities import Comment, Reaction, Ticket
 from .services import TicketScopes
 from .vo import Priority, ReactionType, TicketStatus, TicketType
@@ -14,7 +15,7 @@ from .vo import Priority, ReactionType, TicketStatus, TicketType
 @dataclass(frozen=True)
 class TicketFilters:
     """
-    Набор фильтров для фильтрации списка тикетов
+    Набор фильтров для фильтрации списка тикетов.
     """
 
     status: TicketStatus | None = None
@@ -24,26 +25,18 @@ class TicketFilters:
     tags: list[str] | None = None
     query: str | None = None
 
-    # По дате
     created_after: datetime | None = None
     created_before: datetime | None = None
 
 
 class TicketRepository(Repository[Ticket]):
     @override
-    async def read(self, ticket_id: UUID, comments_limit: int = 10) -> Ticket | None:
-        """
-        Получение тикета с лимитом на количество комментариев (для производительности)
-        """
-
-    @override
     async def paginate(
             self,
             pagination: Pagination,
             scopes: TicketScopes | None = None,
             filters: TicketFilters | None = None,
-    ) -> Page[Ticket]:
-        """Фильтрация тикетов"""
+    ) -> Page[Ticket]: ...
 
     async def get_total(
             self, project_id: UUID | None = None, counterparty_id: UUID | None = None
@@ -56,8 +49,7 @@ class TicketRepository(Repository[Ticket]):
          - Принадлежащие контрагенту (указан контрагент, проект не указан)
         """
 
-    async def get_by_reporter(self, reporter_id: UUID, params: Pagination) -> Page[Ticket]:
-        """Получение тикетов по его инициатору"""
+    async def get_by_reporter(self, reporter_id: UUID, params: Pagination) -> Page[Ticket]: ...
 
 
 class CommentRepository(Repository[Comment]):
@@ -103,12 +95,11 @@ class ReactionRepository(Repository[Reaction]):
 
     async def find(
             self, comment_id: UUID, author_id: UUID, reaction_type: ReactionType
-    ) -> Reaction | None:
-        """Получение реакции пользователя на комментарий"""
+    ) -> Reaction | None: ...
 
     async def get_reaction_stats(self, comment_ids: list[UUID], user_id: UUID) -> ReactionStats:
         """
-        Получение информации о реакциях для каждого комментария из списка
+        Получить агрегированные данные о реакциях для каждого комментария из списка.
         """
 
     async def get_counts(self, comment_ids: list[UUID]) -> dict[UUID, dict[ReactionType, int]]:

@@ -11,12 +11,12 @@ from src.media.infra.repo import SqlAttachmentRepository
 from src.media.infra.s3 import S3Storage
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="uow")
 def minio_secret_key():
     return "minioadmin123"
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="uow")
 def minio_container(minio_secret_key):
     minio_container = (
         MinioContainer(
@@ -34,13 +34,13 @@ def minio_container(minio_secret_key):
         yield minio
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="uow")
 def postgres_container():
     with PostgresContainer(image="postgres:16.9", driver="asyncpg") as postgres:
         yield postgres
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="uow")
 def redis_container():
     container = RedisContainer("redis_client:7-alpine")
     container.start()
@@ -77,7 +77,7 @@ async def session(engine):
         yield session
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="uow")
 def s3_storage(minio_container, minio_secret_key):
     return S3Storage(
         endpoint_url=f"http://{minio_container.get_container_host_ip()}:{minio_container.get_exposed_port(9000)}",

@@ -1,11 +1,10 @@
 from dataclasses import dataclass
 from uuid import UUID
 
-from ...iam.domain.vo import UserRole
-from ...shared.domain.events import Event
-from .vo import CommentType, ReactionType, Priority
+from src.iam.domain.vo import UserRole
+from src.shared.domain.events import Event
 
-# — События для тикетов –
+from .vo import CommentType, Priority, ReactionType, TicketNumber, TicketStatus
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -14,7 +13,7 @@ class TicketCreated(Event):
 
     ticket_id: UUID
     title: str
-    number: str
+    number: TicketNumber
     created_by: UUID
     reporter_id: UUID
     priority: Priority
@@ -24,10 +23,12 @@ class TicketCreated(Event):
 
 @dataclass(frozen=True, kw_only=True)
 class TicketAssigned(Event):
-    """Тикет назначен"""
+    """
+    Тикет назначен на исполнителя.
+    """
 
     ticket_id: UUID
-    number: str
+    number: TicketNumber
     title: str
     assignee_id: UUID
     assigned_by: UUID
@@ -36,7 +37,15 @@ class TicketAssigned(Event):
 
 @dataclass(frozen=True, kw_only=True)
 class TicketStatusChanged(Event):
-    """Статус тикета был изменён"""
+    """
+    Изменён статус заявки.
+    """
+
+    ticket_id: UUID
+    number: TicketNumber
+    old_status: TicketStatus
+    new_status: TicketStatus
+    changed_by: UUID
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -44,10 +53,43 @@ class TicketPriorityChanged(Event):
     """Изменён приоритет тикета"""
 
     ticket_id: UUID
-    number: str
+    number: TicketNumber
     changed_by: UUID
     old_priority: Priority
     new_priority: Priority
+
+
+@dataclass(frozen=True, kw_only=True)
+class TicketResolved(Event):
+    """
+    Тикет решён.
+    """
+
+    ticket_id: UUID
+    number: TicketNumber
+    resolved_by: UUID
+
+
+@dataclass(frozen=True, kw_only=True)
+class TicketClosed(Event):
+    """
+    Тикет был успешно закрыт.
+    """
+
+    ticket_id: UUID
+    number: TicketNumber
+    closed_by: UUID
+
+
+@dataclass(frozen=True, kw_only=True)
+class TicketReopened(Event):
+    """
+    Тикет был переоткрыт после завершения.
+    """
+
+    ticket_id: UUID
+    number: TicketNumber
+    reopened_by: UUID
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -55,7 +97,7 @@ class TicketArchived(Event):
     """Тикет архивирован"""
 
     ticket_id: UUID
-    number: str
+    number: TicketNumber
     reporter_id: UUID
     archived_by: UUID
 
@@ -88,5 +130,3 @@ class ReactionAdded(Event):
     comment_id: UUID
     author_id: UUID
     reaction_type: ReactionType
-
-

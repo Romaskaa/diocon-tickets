@@ -62,7 +62,7 @@ def current_customer_user(counterparty_id, customer_id):
 @pytest.fixture
 async def created_ticket(customer_id, counterparty_id, fake_ticket_repo):
     ticket = Ticket.create(
-        ticket_number=TicketNumber("TEST-26-00000001"),
+        number=TicketNumber("TEST-26-00000001"),
         reporter_id=customer_id,
         created_by=uuid4(),
         created_by_role=UserRole.SUPPORT_AGENT,
@@ -207,7 +207,7 @@ class TestReplyToComment:
 
         # Добавление левого тикета
         ticket = Ticket.create(
-            ticket_number=TicketNumber("TEST1-26-00000002"),
+            number=TicketNumber("TEST1-26-00000002"),
             reporter_id=uuid4(),
             created_by=uuid4(),
             created_by_role=UserRole.SUPPORT_AGENT,
@@ -309,7 +309,7 @@ class TestDeleteComment:
 
         # Добавление левого тикета
         ticket = Ticket.create(
-            ticket_number=TicketNumber("TEST1-26-00000002"),
+            number=TicketNumber("TEST1-26-00000002"),
             reporter_id=uuid4(),
             created_by=uuid4(),
             created_by_role=UserRole.SUPPORT_AGENT,

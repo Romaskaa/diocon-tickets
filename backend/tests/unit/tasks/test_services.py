@@ -73,7 +73,7 @@ async def created_project(fake_project_repo, fake_membership_repo, current_suppo
 @pytest.fixture
 async def created_ticket(fake_ticket_repo, created_project):
     ticket = Ticket.create(
-        ticket_number=TicketNumber("TESTPRJ-26-00000001"),
+        number=TicketNumber("TESTPRJ-26-00000001"),
         title="Test ticket",
         description="This ticket created for test",
         reporter_id=uuid4(),

@@ -75,7 +75,7 @@ async def assign_task(
         current_subject: CurrentSubjectDep,
         service: TaskServiceDep,
 ) -> TaskResponse:
-    return await service.assign_to(task_id, assignee_id, current_subject)
+    return await service.assign(task_id, assignee_id, current_subject)
 
 
 @router.post(

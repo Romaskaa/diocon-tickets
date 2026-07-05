@@ -4,10 +4,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, Query, status
 
-from ..iam.dependencies import CurrentUserDep, get_current_user
-from ..shared.dependencies import PaginationDep
-from ..shared.domain.exceptions import NotFoundError
-from ..shared.schemas import Page
+from src.iam.dependencies import CurrentSubjectDep, CurrentUserDep, get_current_user
+from src.shared.dependencies import PaginationDep
+from src.shared.domain.exceptions import NotFoundError
+from src.shared.schemas import Page
+
 from .dependencies import (
     CommentServiceDep,
     ReactionServiceDep,
@@ -36,34 +37,34 @@ from .schemas import (
     TicketViewResponse,
 )
 
-router = APIRouter(prefix="/tickets", tags=["Тикеты"])
+router = APIRouter(prefix="/tickets", tags=["Заявки"])
 
 
 @router.post(
     path="",
     status_code=status.HTTP_201_CREATED,
     response_model=TicketResponse,
-    summary="Создание нового тикета"
+    summary="Создать новую заявку"
 )
 async def create_ticket(
-        current_user: CurrentUserDep, data: TicketCreate, service: TicketServiceDep
+        current_subject: CurrentSubjectDep, data: TicketCreate, service: TicketServiceDep
 ) -> TicketResponse:
-    return await service.create(data, current_user)
+    return await service.create(data, current_subject)
 
 
 @router.get(
     path="/me",
     status_code=status.HTTP_200_OK,
     response_model=Page[TicketPreview],
-    summary="Получение моих тикетов",
-    description="Только те тикеты, где текущий пользователь записан как инициатор"
+    summary="Получить мои заявки",
+    description="Заявки, у которых пользователь инициатор"
 )
 async def get_my_tickets(
-        current_user: CurrentUserDep,
-        params: PaginationDep,
+        current_subject: CurrentSubjectDep,
+        pagination: PaginationDep,
         repository: TicketRepoDep,
 ) -> Page[TicketPreview]:
-    page = await repository.get_by_reporter(current_user.user_id, params)
+    page = await repository.get_by_reporter(current_user.user_id, pagination)
     return page.to_response(map_ticket_to_preview)
 
 
@@ -134,7 +135,7 @@ async def assign_ticket(
         current_user: CurrentUserDep,
         service: TicketServiceDep,
 ) -> TicketResponse:
-    return await service.assign_to(
+    return await service.assign(
         ticket_id=ticket_id,
         assignee_id=data.assignee_id,
         current_user=current_user,

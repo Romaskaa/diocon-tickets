@@ -1,12 +1,24 @@
-from typing import ClassVar
-
 from .authz import PermissionResult, Subject, SubjectType
 from .entities import Invitation, User
 from .vo import UserRole
 
 
+class HasAnyRoleRule:
+    def __init__(self, subject: Subject, required_roles: list[UserRole]) -> None:
+        self.subject = subject
+        self.required_roles = required_roles
+
+    def check(self) -> PermissionResult:
+        if self.subject.has_any_role(self.required_roles):
+            return PermissionResult(True)
+
+        return PermissionResult(
+            False, f"Required a least one role: {'; '.join(self.required_roles)}"
+        )
+
+
 class IsAdminRule:
-    def __init__(self, subject: Subject) -> None:
+    def __init__(self, subject: Subject | User) -> None:
         self.subject = subject
 
     def check(self) -> PermissionResult:
@@ -17,38 +29,36 @@ class IsAdminRule:
 
 
 class IsStaffRule:
-    ALLOWED_USER_ROLES: ClassVar[set[UserRole]] = {
-        UserRole.ADMIN,
-        UserRole.SUPPORT_MANAGER,
-        UserRole.SUPPORT_AGENT,
-        UserRole.DEVELOPER,
-        UserRole.FINANCE,
-        UserRole.ACCOUNT_MANAGER,
-    }
-
     def __init__(self, subject: Subject | User) -> None:
         self.subject = subject
 
     def check(self) -> PermissionResult:
-        for user_role in self.ALLOWED_USER_ROLES:
-            if self.subject.has_role(user_role):
-                return PermissionResult(True)
+        if self.subject.has_any_role(UserRole.staff_roles()):
+            return PermissionResult(True)
 
-        return PermissionResult(False, "Required staff user")
+        return PermissionResult(False, "Require staff user")
+
+
+class IsSupportRule:
+    def __init__(self, subject: Subject | User) -> None:
+        self.subject = subject
+
+    def check(self) -> PermissionResult:
+        if self.subject.has_any_role(UserRole.support_roles()):
+            return PermissionResult(True)
+
+        return PermissionResult(False, "Require support user")
 
 
 class IsCustomerRule:
-    ALLOWED_USER_ROLES: ClassVar[set[UserRole]] = {UserRole.CUSTOMER, UserRole.CUSTOMER_ADMIN}
-
     def __init__(self, subject: Subject | User) -> None:
         self.subject = subject
 
     def check(self) -> PermissionResult:
-        for user_role in self.ALLOWED_USER_ROLES:
-            if self.subject.has_role(user_role):
-                return PermissionResult(True)
+        if self.subject.has_any_role(UserRole.customer_roles()):
+            return PermissionResult(True)
 
-        return PermissionResult(False, "Required customer user")
+        return PermissionResult(False, "Require customer user")
 
 
 class IsUserRule:

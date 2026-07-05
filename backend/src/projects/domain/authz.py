@@ -11,7 +11,7 @@ from .rules import (
     IsProjectManagerRule,
     IsProjectOwnerOrManagerRule,
     IsProjectOwnerRule,
-    ProjectMemberExistsRule,
+    IsMemberExistsRule,
     TargetRoleAssignmentRule,
 )
 from .vo import ProjectRole
@@ -31,7 +31,7 @@ class ProjectAuthZService:
         member = await self.member_repo.find(project_id, subject.id)
         rules.append(
             AllOf(
-                ProjectMemberExistsRule(member),
+                IsMemberExistsRule(member),
                 IsProjectOwnerRule(member),
             )
         )
@@ -44,7 +44,7 @@ class ProjectAuthZService:
         member = await self.member_repo.find(project_id, subject.id)
         rules.append(
             AllOf(
-                ProjectMemberExistsRule(member),
+                IsMemberExistsRule(member),
                 AnyOf(
                     IsProjectManagerRule(member),
                     IsProjectOwnerRule(member),
@@ -65,7 +65,7 @@ class ProjectAuthZService:
         actor_policy = AnyOf(
             IsAdminRule(subject),
             AllOf(
-                ProjectMemberExistsRule(member),
+                IsMemberExistsRule(member),
                 TargetRoleAssignmentRule(member, target_roles),
             )
         )
@@ -81,9 +81,9 @@ class ProjectAuthZService:
 
         rules.append(
             AllOf(
-                ProjectMemberExistsRule(actor_member),
+                IsMemberExistsRule(actor_member),
                 IsProjectOwnerOrManagerRule(actor_member),
-                ProjectMemberExistsRule(member_to_remove),
+                IsMemberExistsRule(member_to_remove),
                 Not(IsProjectOwnerRule(member_to_remove)),
             )
         )

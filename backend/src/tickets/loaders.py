@@ -3,9 +3,10 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from uuid import UUID
 
-from ..crm.domain.entities import Counterparty
-from ..iam.domain.entities import User
-from ..projects.domain.entities import Project
+from src.crm.domain.entities import Counterparty
+from src.iam.domain.entities import User
+from src.projects.domain.entities import Project
+
 from .domain.entities import Ticket
 
 

@@ -1,24 +1,29 @@
+from typing import Annotated, Self
+
 from dataclasses import dataclass, field
 from datetime import datetime
-from uuid import UUID, uuid4
+from uuid import UUID
 
-from ....iam.domain.exceptions import PermissionDeniedError
-from ....iam.domain.vo import UserRole
-from ....media.domain.entities import Attachment
-from ....shared.domain.entities import AggregateRoot, Entity
-from ....shared.domain.exceptions import InvalidStateError, InvariantViolationError
-from ....shared.utils.time import current_datetime
-from ..constants import (
-    ALLOWED_ASSIGN_STATUSES,
-    ALLOWED_EDIT_STATUSES,
-    ALLOWED_TRANSITIONS,
-)
+from typing_extensions import Doc
+
+from src.iam.domain.vo import UserRole
+from src.media.domain.entities import Attachment
+from src.shared.domain.entities import AggregateRoot
+from src.shared.domain.exceptions import InvariantViolationError
+from src.shared.utils.time import current_datetime
+
 from ..events import (
     TicketArchived,
     TicketAssigned,
+    TicketClosed,
     TicketCreated,
     TicketPriorityChanged,
+    TicketReopened,
+    TicketResolved,
+    TicketStatusChanged,
 )
+from ..state_registry import get_state
+from ..states import TicketState
 from ..vo import (
     Priority,
     Tag,
@@ -29,34 +34,18 @@ from ..vo import (
 
 
 @dataclass(kw_only=True)
-class TicketHistoryEntry(Entity):
-    """
-    Запись в истории изменения тикета.
-    Всегда заполняется автоматически внутри бизнес-методов.
-    """
-
-    ticket_id: UUID
-    actor_id: UUID  # Кто совершил действие
-    action: str  # 'status_changed', 'assigned', 'comment_added'
-    old_value: str | None = None
-    new_value: str | None = None
-    description: str = field(default="")  # Человеко-читаемое описание
-
-
-@dataclass(kw_only=True)
 class Ticket(AggregateRoot):
     """
-    Агрегат Тикет — центральная сущность системы
+    Заявка - запрос на услугу от пользователя.
     """
 
     project_id: UUID | None = None
     counterparty_id: UUID | None = None
     product_id: UUID | None = None
 
-    # Ключевые поля
-    created_by: UUID  # Технический создатель
+    created_by: Annotated[UUID, Doc("Фактический создатель заявки")]
     created_by_role: UserRole
-    reporter_id: UUID  # Инициатор/автор проблемы (тот кто пожаловался)
+    reporter_id: Annotated[UUID, Doc("Инициатор/автор проблемы (тот кто пожаловался)")]
 
     number: TicketNumber
     title: str
@@ -64,15 +53,11 @@ class Ticket(AggregateRoot):
     type: TicketType
     status: TicketStatus
     priority: Priority
-    assignee_id: UUID | None = None
+    assignee_id: Annotated[UUID | None, Doc("Исполнитель")] = None
     closed_at: datetime | None = None
 
-    # Дополнительно
     tags: list[Tag] = field(default_factory=list)
-
-    # Внутренние коллекции агрегата
     attachments: list[Attachment] = field(default_factory=list)
-    history: list[TicketHistoryEntry] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         # 1. Заголовок не должен быть пустым
@@ -80,15 +65,43 @@ class Ticket(AggregateRoot):
             raise ValueError("Title cannot be empty")
 
         # 2. если тикет создан клиентом - контрагент должен быть заполнен
-        if self.created_by_role.is_customer() and self.counterparty_id is None:
+        if self.created_by_role.is_customer and self.counterparty_id is None:
             raise InvariantViolationError(
                 "Customer-created ticket must be linked to a counterparty"
             )
 
+    @property
+    def state(self) -> TicketState:
+        """
+        Текущее состояние заявки.
+        """
+
+        return get_state(self.status)
+
+    def transition_to(self, new_status: TicketStatus, actor_id: UUID) -> None:
+        """
+        Переход между состояниями тикета.
+        """
+
+        old_status = self.status
+        self.status = new_status
+        self.updated_at = current_datetime()
+
+        self.register_event(
+            TicketStatusChanged(
+                ticket_id=self.id,
+                old_status=old_status,
+                new_status=self.status,
+                changed_by=actor_id,
+            )
+        )
+
+    # ====================== Публичное API ======================
+
     @classmethod
     def create(
         cls,
-        ticket_number: TicketNumber,
+        number: TicketNumber,
         reporter_id: UUID,
         created_by: UUID,
         created_by_role: UserRole,
@@ -100,20 +113,16 @@ class Ticket(AggregateRoot):
         counterparty_id: UUID | None = None,
         product_id: UUID | None = None,
         tags: list[Tag] | None = None,
-    ) -> "Ticket":
-        """Создание тикета"""
+    ) -> Self:
 
-        # 1. Создание доменной сущности
-        ticket_id = uuid4()
         initial_status = (
-            TicketStatus.PENDING_APPROVAL if created_by_role.is_customer() else TicketStatus.NEW
+            TicketStatus.PENDING_APPROVAL if created_by_role.is_customer else TicketStatus.NEW
         )
         ticket = cls(
-            id=ticket_id,
             created_by_role=created_by_role,
             created_by=created_by,
             reporter_id=reporter_id,
-            number=ticket_number,
+            number=number,
             title=title,
             description=description,
             type=ticket_type,
@@ -123,22 +132,13 @@ class Ticket(AggregateRoot):
             counterparty_id=counterparty_id,
             product_id=product_id,
             tags=tags if tags is not None else [],
-            history=[
-                TicketHistoryEntry(
-                    ticket_id=ticket_id,
-                    actor_id=created_by,
-                    action="ticket_created",
-                    description=f"Создан новый тикет - {ticket_number}",
-                )
-            ],
         )
 
-        # 2. Регистрация доменного события
         ticket.register_event(
             TicketCreated(
-                ticket_id=ticket_id,
+                ticket_id=ticket.id,
                 title=title,
-                number=f"{ticket_number}",
+                number=number,
                 created_by=created_by,
                 reporter_id=reporter_id,
                 priority=priority,
@@ -149,136 +149,151 @@ class Ticket(AggregateRoot):
         return ticket
 
     def edit(
-            self,
-            edited_by: UUID,
-            title: str | None = None,
-            description: str | None = None,
-            priority: Priority | None = None,
-            tags: list[Tag] | None = None
+        self,
+        edited_by: UUID,
+        title: str | None = None,
+        description: str | None = None,
+        priority: Priority | None = None,
+        tags: list[Tag] | None = None,
     ) -> None:
-        """Редактирование тикета"""
+        """
+        Отредактировать информацию и тикете.
+        """
 
-        edited_fields = []
+        self.state.edit(self, edited_by)
 
-        # 1. Редактировать может только автор или инициатор
-        if edited_by not in {self.reporter_id, self.created_by}:
-            raise PermissionDeniedError("Only author or reporter can edit ticket")
+        changed = False
 
-        # 2. Нельзя редактировать тикет, если он в работе + если тикет архивирован
-        if self.status not in ALLOWED_EDIT_STATUSES:
-            raise InvariantViolationError("Cannot edit ticket in not allowed status")
-        if self.is_deleted:
-            raise InvariantViolationError("Cannot edit archived ticket")
-
-        # 3. Редактирование заголовка
-        if title is not None and title.strip() != self.title and title.strip():
-            old_title = self.title
+        if title is not None and title.strip() and title.strip() != self.title:
             self.title = title.strip()
-            edited_fields.append(("title", old_title, self.title))
+            changed = True
 
-        # 4. Редактирование описания
-        if description is not None and description.strip() != self.description \
-                and description.strip():
-            old_description = self.description
+        if description is not None and description.strip() != self.description:
             self.description = description.strip()
-            edited_fields.append(("description", old_description, self.description))
+            changed = True
 
-        # 5. Обновление приоритета
         if priority is not None and priority != self.priority:
             old_priority = self.priority
             self.priority = priority
-            edited_fields.append(("priority", old_priority, self.priority))
+            changed = True
 
-            # 5.1 Регистрация доменного события при изменении приоритета
             self.register_event(
                 TicketPriorityChanged(
                     ticket_id=self.id,
-                    number=f"{self.number}",
+                    number=self.number,
                     changed_by=edited_by,
                     old_priority=old_priority,
                     new_priority=self.priority,
                 )
             )
 
-        # 6. Редактирование тегов
         if tags is not None and set(tags) != set(self.tags):
-            old_tags = [tag.name for tag in self.tags]
             self.tags = tags[:]
-            edited_fields.append(("tags", old_tags, [tag.name for tag in tags]))
+            changed = True
 
-        # 7. Запись изменений в историю
-        if edited_fields:
+        if changed:
             self.updated_at = current_datetime()
-            for field, old_value, new_value in edited_fields:
-                self.write_history(
-                    actor_id=edited_by,
-                    action=f"{field}_edited",
-                    old_value=str(old_value),
-                    new_value=str(new_value),
-                    description="Поле отредактировано"
-                )
 
     def archive(self, archived_by: UUID) -> None:
-        """Архивирование тикета"""
+        """
+        Заархивировать тикет (мягкое удаление).
+        """
 
-        # 1. Нельзя архивировать уже архивированный тикет
         if self.is_deleted:
             return
 
-        # 2. Архивирование
         self.deleted_at = current_datetime()
         self.updated_at = current_datetime()
 
-        # 3. Запись в историю
-        self.write_history(
-            actor_id=archived_by,
-            action="ticket_archived",
-            description="Тикет архивирован",
-        )
-
-        # 4. Регистрация доменного события
         self.register_event(
             TicketArchived(
                 ticket_id=self.id,
-                number=f"{self.number}",
+                number=self.number,
                 reporter_id=self.reporter_id,
                 archived_by=archived_by,
             )
         )
 
-    def assign_to(self, assignee_id: UUID, assigned_by: UUID) -> None:
-        """Назначение (или переназначение) тикета на исполнителя (агента поддержки)"""
+    def assign(self, assignee_id: UUID, assigned_by: UUID) -> None:
+        """
+        Назначить тикет на исполнителя.
+        """
 
-        # 1. Для назначения тикета должен быть определённый статус
-        if self.status not in ALLOWED_ASSIGN_STATUSES:
-            raise InvalidStateError(
-                f"Cannot assign ticket in status '{self.status.value}'. "
-                f"Allowed statuses: {', '.join(status for status in ALLOWED_ASSIGN_STATUSES)}"
+        self.state.assign(self, assignee_id, assigned_by)
+
+    def start_progress(self, started_by: UUID) -> None:
+        """
+        Начать работу над заявкой.
+        """
+
+        self.state.start_progress(self, started_by)
+
+    def resolve(self, resolved_by: UUID) -> None:
+        self.state.resolve(self, resolved_by)
+
+        self.register_event(
+            TicketResolved(
+                ticket_id=self.id,
+                number=self.number,
+                resolved_by=resolved_by,
             )
-
-        # 2. Если тикет переназначается на самого себя - то без записи в историю
-        if assignee_id == self.assignee_id:
-            return
-
-        # 3. Назначение исполнителя
-        old_assignee = self.assignee_id
-        self.assignee_id = assignee_id
-        self.updated_at = current_datetime()
-
-        # 4. Запись изменений в историю
-        self.write_history(
-            actor_id=assigned_by,
-            action="assigned",
-            old_value=f"{old_assignee}" if old_assignee else None,
-            new_value=f"{assignee_id}",
-            description="Тикет назначен пользователю",
         )
 
-        # 5. Назначение тикета
+    def reopen(self, reopened_by: UUID) -> None:
+        """
+        Переоткрыть тикет.
+        Сценарий использования: по решённой заявке возникла ошибка.
+        """
+
+        self.state.reopen(self, reopened_by)
+
+        self.register_event(
+            TicketReopened(
+                ticket_id=self.id,
+                number=self.number,
+                reopened_by=reopened_by,
+            )
+        )
+
+    def cancel(self, cancelled_by: UUID) -> None:
+        """
+        Отменить тикет.
+        """
+
+        self.state.cancel(self, cancelled_by)
+
+    def reject(self, rejected_by: UUID) -> None:
+        """
+        Отклонить тикет. Например, клиент может отклонить на этапе согласования.
+        """
+
+        self.state.reject(self, rejected_by)
+
+    def close(self, closed_by: UUID) -> None:
+        """
+        Закрыть тикет (заявка считается решённой после успешного решения
+        и согласования с клиентом).
+        """
+
+        self.state.close(self, closed_by)
+
+    # ====================== Внутренние мутации ======================
+
+    def apply_assignment(self, assignee_id: UUID, assigned_by: UUID) -> None:
+        """
+        Устанавливает исполнителя + регистрирует событие.
+        """
+
+        if self.assignee_id == assignee_id:
+            return
+
+        old_assignee = self.assignee_id
+        self.assignee_id = assignee_id
+
         self.register_event(
             TicketAssigned(
                 ticket_id=self.id,
-                number=f"{self.number}",
+                number=self.number,
                 title=self.title,
                 assignee_id=assignee_id,
                 assigned_by=assigned_by,
@@ -286,54 +301,31 @@ class Ticket(AggregateRoot):
             )
         )
 
-    def change_status(self, new_status: TicketStatus, changed_by: UUID) -> None:
-        """Изменение статуса тикета"""
-
-        # 1. Проверка возможности перехода к новому статусу
-        if new_status not in ALLOWED_TRANSITIONS.get(self.status, []):
-            raise InvalidStateError(
-                f"Not allowed status transition: from '{self.status}' to '{new_status}'"
-            )
-
-        # 2. Установка нового статуса
-        old_status = self.status
-        self.status = new_status
-
-        # 3. Если тикет закрыт, то устанавливается время закрытия
-        if new_status == TicketStatus.CLOSED:
-            self.closed_at = current_datetime()
-
-        # 4. Запись изменений в историю
-        self.write_history(
-            actor_id=changed_by,
-            action="status_changed",
-            old_value=f"{old_status}",
-            new_value=f"{new_status}",
-            description=(
-                f"Статус изменён с `{old_status.value}` на `{new_status.value}`"
-            )
-        )
-
-    def write_history(
-        self,
-        actor_id: UUID,
-        action: str,
-        description: str,
-        old_value: str | None = None,
-        new_value: str | None = None,
-    ) -> None:
+    def clear_assignment(self) -> None:
         """
-        Записывает событие в историю тикета.
-        Используется из сервисного слоя и из внутренних методов.
+        Сбрасывает текущего исполнителя (просто мутация данных).
         """
 
-        self.history.append(
-            TicketHistoryEntry(
+        self.assignee_id = None
+
+    def mark_closed(self, closed_by: UUID) -> None:
+        """
+        Установить время закрытия тикета.
+        """
+
+        self.closed_at = current_datetime()
+
+        self.register_event(
+            TicketClosed(
                 ticket_id=self.id,
-                actor_id=actor_id,
-                action=action,
-                old_value=old_value,
-                new_value=new_value,
-                description=description,
+                number=self.number,
+                closed_by=closed_by,
             )
         )
+
+    def clear_closing(self) -> None:
+        """
+        Сбросить время завершения (просто мутация данных).
+        """
+
+        self.closed_at = None
