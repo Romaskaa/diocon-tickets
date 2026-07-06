@@ -89,3 +89,18 @@ class ProjectAuthZService:
         )
 
         return AnyOf(*rules).check()
+    
+    async def can_export_project(self, subject: Subject, project_id: UUID) -> PermissionResult:
+        """
+        Проверяет, может ли субъект экспортировать отчет по проекту.
+        """
+
+        member = await self.member_repo.find(project_id, subject.id)
+
+        return AllOf(
+            IsMemberExistsRule(member),
+            AnyOf(
+                IsProjectManagerRule(member),
+                IsProjectOwnerRule(member),
+            ),
+        ).check()
