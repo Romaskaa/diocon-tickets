@@ -22,7 +22,7 @@ from ..events import (
     TicketResolved,
     TicketStatusChanged,
 )
-from ..state_registry import get_state
+from ..state_factory import get_state
 from ..states import TicketState
 from ..vo import (
     Priority,

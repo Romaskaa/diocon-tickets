@@ -1,6 +1,5 @@
 from typing import Annotated
 
-from datetime import datetime
 from uuid import UUID
 
 from fastapi import Depends, Query
@@ -16,16 +15,23 @@ from src.iam.infra.repos import SqlUserRepository
 from src.projects.dependencies import ProjectMemberRepoDep, ProjectRepoDep
 from src.projects.domain.entities import Project
 from src.projects.infra.repos import SqlProjectRepository
-from src.shared.dependencies import EventPublisherDep, SessionDep, PaginationDep
+from src.shared.dependencies import (
+    EventPublisherDep,
+    PaginationDep,
+    SessionDep,
+    TimeRangeFiltersDep,
+)
 from src.shared.schemas import Page
 
+from ..iam.domain.authz import Subject
 from .domain.authz import TicketAuthZService
-from .domain.repos import CommentRepository, ReactionRepository, TicketFilters, TicketRepository
-from .domain.services import TicketScopeService
+from .domain.dtos import TicketFilters
+from .domain.repos import CommentRepository, ReactionRepository, TicketRepository
 from .domain.vo import Priority, TicketStatus, TicketType
 from .infra.repos import SqlCommentRepository, SqlReactionRepository, SqlTicketRepository
-from .loaders import TicketDataLoader
-from .services import CommentService, ReactionService, TicketService, TicketViewService
+from .loaders import TicketReferenceLoader
+from .schemas import TicketViewResponse
+from .services import CommentService, ReactionService, TicketQueryService, TicketService
 
 
 def get_ticket_repo(session: SessionDep) -> SqlTicketRepository:
@@ -92,28 +98,19 @@ async def fetch_projects(project_ids: list[UUID]) -> list[Project]:
         return await project_repo.get_by_ids(project_ids)
 
 
-def get_ticket_data_loader() -> TicketDataLoader:
-    return TicketDataLoader(
+def get_ticket_reference_loader() -> TicketReferenceLoader:
+    return TicketReferenceLoader(
         users_fetcher=fetch_users,
         counterparties_fetcher=fetch_counterparties,
         projects_fetcher=fetch_projects,
     )
 
 
-def get_ticket_scope_service(membership_repo: ProjectMemberRepoDep) -> TicketScopeService:
-    return TicketScopeService(project_membership_repo=membership_repo)
-
-
-def get_ticket_view_service(
+def get_ticket_query_service(
         ticket_repo: TicketRepoDep,
-        ticket_scope_service: TicketScopeService = Depends(get_ticket_scope_service),
-        ticket_data_loader: TicketDataLoader = Depends(get_ticket_data_loader)
-) -> TicketViewService:
-    return TicketViewService(
-        ticket_repo=ticket_repo,
-        ticket_scope_service=ticket_scope_service,
-        ticket_data_loader=ticket_data_loader,
-    )
+        reference_loader: TicketReferenceLoader = Depends(get_ticket_reference_loader)
+) -> TicketQueryService:
+    return TicketQueryService(ticket_repo=ticket_repo, reference_loader=reference_loader)
 
 
 def get_comment_service(
@@ -147,44 +144,43 @@ def get_reaction_service(
 
 
 TicketServiceDep = Annotated[TicketService, Depends(get_ticket_service)]
-TicketViewServiceDep = Annotated[TicketViewService, Depends(get_ticket_view_service)]
+TicketQueryServiceDep = Annotated[TicketQueryService, Depends(get_ticket_query_service)]
 CommentServiceDep = Annotated[CommentService, Depends(get_comment_service)]
 ReactionServiceDep = Annotated[ReactionService, Depends(get_reaction_service)]
 
 
 def get_ticket_filters(
-        status: Annotated[
-            TicketStatus | None, Query(..., description="По статусу")
+        time_range: TimeRangeFiltersDep,
+        statuses: Annotated[
+            list[TicketStatus] | None, Query(max_length=5, description="По статусу")
         ] = None,
-        priority: Annotated[
-            Priority | None, Query(..., description="По приоритету")
+        priorities: Annotated[
+            list[Priority] | None, Query(max_length=5, description="По приоритету")
         ] = None,
         ticket_type: Annotated[
-            TicketType | None, Query(..., description="По виду заявки")
+            TicketType | None, Query(description="По виду заявки")
         ] = None,
         tags: Annotated[
-            list[str] | None, Query(..., max_length=10, description="По тегам")
+            list[str] | None, Query(max_length=10, description="По тегам")
         ] = None,
-        query: Annotated[str | None, Query(..., description="Поисковый запрос")] = None,
-        created_after: Annotated[
-            datetime | None, Query(..., description="Создан после")
-        ] = None,
-        created_before: Annotated[
-            datetime | None, Query(..., description="Создан до")
-        ] = None,
+        q: Annotated[str | None, Query(description="Поисковый запрос")] = None,
 ) -> TicketFilters:
     return TicketFilters(
-        status=status,
-        priority=priority,
+        search_query=q,
+        counterparty_id=...,
+        project_ids=...,
+        statuses=statuses,
+        priorities=priorities,
         type=ticket_type,
         tags=tags,
-        query=query,
-        created_after=created_after,
-        created_before=created_before,
+        actors=...,
+        time_range=time_range,
     )
 
 
 TicketFiltersDep = Annotated[TicketFilters, Depends(get_ticket_filters)]
 
 
-async def paginate_my_tickets(pagination: PaginationDep, ticket_)
+async def paginate_tickets(
+        pagination: PaginationDep, filters: TicketFilters, ticket_repo: TicketRepoDep
+) -> Page[TicketViewResponse]: ...

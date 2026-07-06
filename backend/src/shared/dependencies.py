@@ -1,14 +1,18 @@
 from typing import Annotated
 
+from datetime import datetime
+
 from fastapi import Depends, Query, Request
 from pydantic import PositiveInt
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.broker import broker
-from ..core.database import get_db
-from ..core.redis import redis_client
-from ..core.settings import settings
+from src.core.broker import broker
+from src.core.database import get_db
+from src.core.redis import redis_client
+from src.core.settings import settings
+
 from ..event_config import EVENT_TOPIC_MAP
+from .domain.dtos import TimeRangeFilters
 from .domain.events import EventPublisher
 from .domain.exceptions import RateLimitExceededError
 from .infra.events import FastStreamEventPublisher
@@ -45,7 +49,15 @@ def get_pagination(
     return Pagination(page=page, size=size)
 
 
+def get_time_range_filters(
+        created_after: Annotated[datetime | None, Query(description="Создан после")] = None,
+        created_before: Annotated[datetime | None, Query(description="Создан до")] = None,
+) -> TimeRangeFilters:
+    return TimeRangeFilters(created_after=created_after, created_before=created_before)
+
+
 PaginationDep = Annotated[Pagination, Depends(get_pagination)]
+TimeRangeFiltersDep = Annotated[TimeRangeFilters, Depends(get_time_range_filters)]
 
 
 def get_event_publisher() -> FastStreamEventPublisher:

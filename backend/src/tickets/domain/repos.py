@@ -1,41 +1,20 @@
 from typing import override
 
 from dataclasses import dataclass
-from datetime import datetime
 from uuid import UUID
 
 from src.shared.domain.repos import Repository
 from src.shared.schemas import Page, Pagination
 
+from .dtos import TicketFilters
 from .entities import Comment, Reaction, Ticket
-from .services import TicketScopes
-from .vo import Priority, ReactionType, TicketStatus, TicketType
-
-
-@dataclass(frozen=True)
-class TicketFilters:
-    """
-    Набор фильтров для фильтрации списка тикетов.
-    """
-
-    status: TicketStatus | None = None
-    priority: Priority | None = None
-    type: TicketType | None = None
-
-    tags: list[str] | None = None
-    query: str | None = None
-
-    created_after: datetime | None = None
-    created_before: datetime | None = None
+from .vo import ReactionType
 
 
 class TicketRepository(Repository[Ticket]):
     @override
     async def paginate(
-            self,
-            pagination: Pagination,
-            scopes: TicketScopes | None = None,
-            filters: TicketFilters | None = None,
+            self, pagination: Pagination, filters: TicketFilters | None = None,
     ) -> Page[Ticket]: ...
 
     async def get_total(

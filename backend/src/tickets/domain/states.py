@@ -16,7 +16,7 @@ from uuid import UUID
 
 from src.shared.domain.exceptions import InvalidStateError
 
-from .state_registry import register_state
+from .state_factory import register_state
 from .vo import TicketStatus
 
 

@@ -1,17 +1,17 @@
-from typing import Any, override
+from typing import override
 
 from collections import defaultdict
-from collections.abc import Callable
 from uuid import UUID
 
-from sqlalchemy import BinaryExpression, Select, and_, func, or_, select
+from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.orm import selectinload
 
-from ...shared.infra.repos import SqlAlchemyRepository
-from ...shared.schemas import Page, Pagination
+from src.shared.infra.repos import SqlAlchemyRepository
+from src.shared.schemas import Page, Pagination
+
+from ..domain.dtos import ActorsFilters
 from ..domain.entities import Comment, Reaction, Ticket
 from ..domain.repos import ReactionStats, TicketFilters
-from ..domain.services import TicketScopes
 from ..domain.vo import CommentType, ReactionType
 from .mappers import CommentMapper, ReactionMapper, TicketMapper
 from .models import CommentOrm, ReactionOrm, TicketOrm
@@ -22,136 +22,101 @@ class SqlTicketRepository(SqlAlchemyRepository[Ticket, TicketOrm]):
     model_mapper = TicketMapper
 
     @override
-    async def read(self, ticket_id: UUID, comments_limit: int = 10) -> Ticket | None:
-        # 1. Получение тикета с вложениями и историей изменений
+    async def read(self, ticket_id: UUID) -> Ticket | None:
         stmt = (
             select(self.model)
             .where(self.model.id == ticket_id)
-            .options(
-                selectinload(self.model.history),
-                selectinload(self.model.attachments),
-            )
+            .options(selectinload(self.model.attachments))
         )
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
         return None if model is None else self.model_mapper.to_entity(model)
 
-    def _apply_filters(self, stmt: Select, filters: TicketFilters) -> Select:
-        # Определение пары - фильтра и функции построения условия
-        filter_conditions: list[tuple[Any, Callable[[Any], BinaryExpression]]] = [
-            (filters.status, lambda value: self.model.status == value),
-            (filters.priority, lambda value: self.model.priority == value),
-            (filters.type, lambda value: self.model.ticket_type == value),
-            (filters.created_after, lambda value: self.model.created_at >= value),
-            (filters.created_before, lambda value: self.model.created_at <= value),
-            (
-                filters.tags,
-                lambda tags: or_(*[self.model.tags.contains([{"name": tag}]) for tag in tags]),
-            ),
-            (
-                filters.query,
-                lambda query: self.model.search_vector.op("@@")(
-                    func.plainto_tsquery("russian", query)
-                ),
-            ),
-        ]
+    def _apply_actors_filters(
+            self, stmt: Select[tuple[TicketOrm]], filters: ActorsFilters,
+    ) -> Select[tuple[TicketOrm]]:
+        if filters.assignee_id:
+            stmt = stmt.where(self.model.assignee_id == filters.assignee_id)
 
-        for value, condition_func in filter_conditions:
-            if value is not None:
-                stmt = stmt.where(condition_func(value))
+        if filters.reporter_id:
+            stmt = stmt.where(self.model.reporter_id == filters.reporter_id)
+
+        if filters.creator_id:
+            stmt = stmt.where(self.model.created_by == filters.creator_id)
+
+        return stmt
+
+    def _apply_ticket_filters(
+            self, stmt: Select[tuple[TicketOrm]], filters: TicketFilters,
+    ) -> Select[tuple[TicketOrm]]:
+        if filters.statuses:
+            stmt = stmt.where(self.model.status.in_(filters.statuses))
+
+        if filters.priorities:
+            stmt = stmt.where(self.model.priority.in_(filters.priorities))
+
+        if filters.type:
+            stmt = stmt.where(self.model.ticket_type == filters.type)
+
+        if filters.tags:
+            tag_conditions = [self.model.tags.contains([{"name": tag}]) for tag in filters.tags]
+            stmt = stmt.where(or_(*tag_conditions))
+
+        if filters.search_query:
+            stmt = stmt.where(
+                self.model.search_vector.op("@@")(
+                    func.plainto_tsquery("russian", filters.search_query)
+                )
+            )
+
+        if filters.actors:
+            stmt = self._apply_actors_filters(stmt, filters.actors)
+
+        if filters.time_range:
+            stmt = self._apply_time_range_filters(stmt, filters.time_range)
+
         return stmt
 
     @override
     async def paginate(
-            self,
-            pagination: Pagination,
-            scopes: TicketScopes | None = None,
-            filters: TicketFilters | None = None,
+            self, pagination: Pagination, filters: TicketFilters | None = None,
     ) -> Page[Ticket]:
-        # 1. Базовый запрос
         stmt = select(self.model)
 
-        # 2. Фильтрация с учётом области видимости
-        if scopes.reporter_id is not None:
-            stmt = stmt.where(self.model.reporter_id == scopes.reporter_id)
-
-        if scopes.counterparty_id is not None:
-            stmt = stmt.where(
-                (self.model.counterparty_id == scopes.counterparty_id) |
-                (
-                    (self.model.project_id.isnot(None)) &
-                    (self.model.project_id.in_(scopes.project_ids))
-                )
-            )
-
-        if scopes.counterparty_id is None and scopes.project_ids is not None:
-            stmt = stmt.where(
-                (self.model.project_id.is_(None)) | (self.model.project_id.in_(scopes.project_ids))
-            )
-
-        # 3. Применение дополнительных фильтров
-
-        # 2. Применение фильтров
         if filters is not None:
-            stmt = self._apply_filters(stmt, filters)
+            stmt = self._apply_ticket_filters(stmt, filters)
 
-        return await self._paginate(stmt, pagination)
-
-    @override
-    async def _paginate(self, stmt: Select, pagination: Pagination) -> Page[Ticket]:
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        total_items = await self.session.scalar(count_stmt)
-        if total_items == 0:
-            return Page.create([], total_items, pagination.page, pagination.size)
-
-        # 2. Получение страницы
-        stmt = (
-            stmt
-            .order_by(self.model.created_at.desc())
-            .offset(pagination.offset)
-            .limit(pagination.size)
-        )
-        results = await self.session.execute(stmt)
-        models = results.scalars().all()
-
-        return Page.create(
-            items=[self.model_mapper.to_light(model) for model in models],
-            total_items=total_items,
-            page=pagination.page,
-            size=pagination.size,
-        )
+        return await self._paginate(stmt, pagination, model_mapper=self.model_mapper.to_light)
 
     async def get_total(
             self, project_id: UUID | None = None, counterparty_id: UUID | None = None
     ) -> int:
         conditions = []
 
-        # 1. Применение фильтров в зависимости о переданного пространства имён
-        if project_id is not None:  # по проекту
+        if project_id is not None:
             conditions.append(self.model.project_id == project_id)
-            if counterparty_id is not None:  # по проекту и контрагенту (для надёжности)
+            if counterparty_id is not None:
                 conditions.append(self.model.counterparty_id == counterparty_id)
-        # По контрагенту, проект не указан (null)
+
         elif counterparty_id is not None and project_id is None:
             conditions.extend((
                 self.model.counterparty_id == counterparty_id,
                 self.model.project_id.is_(None)
             ))
-        else:  # внутренний тикет (ничего не указано)
+
+        else:
             conditions.extend((
                 self.model.project_id.is_(None), self.model.counterparty_id.is_(None),
             ))
 
-        # 2. Запрос с применением фильтров
         stmt = select(func.count()).select_from(self.model).where(and_(*conditions))
         return await self.session.scalar(stmt) or 0
 
-    async def get_by_reporter(self, reporter_id: UUID, params: Pagination) -> Page[Ticket]:
-        # 1. Базовый запрос
+    async def get_by_reporter(self, reporter_id: UUID, pagination: Pagination) -> Page[Ticket]:
         stmt = select(self.model).where(self.model.reporter_id == reporter_id)
 
-        return await self._paginate(stmt, params)
+        return await self._paginate(stmt, pagination)
 
 
 class SqlCommentRepository(SqlAlchemyRepository[Comment, CommentOrm]):

@@ -3,7 +3,7 @@ from uuid import UUID
 import pytest
 
 from src.tickets.domain.services import TicketScopeService
-from src.tickets.loaders import TicketDataLoader
+from src.tickets.loaders import TicketReferenceLoader
 
 # ============================= Доменные сервисы =============================
 
@@ -46,7 +46,7 @@ def projects_fetcher(fake_project_repo):
 
 @pytest.fixture
 def ticket_data_loader(users_fetcher, counterparties_fetcher, projects_fetcher):
-    return TicketDataLoader(
+    return TicketReferenceLoader(
         users_fetcher=users_fetcher,
         counterparties_fetcher=counterparties_fetcher,
         projects_fetcher=projects_fetcher,

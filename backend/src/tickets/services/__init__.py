@@ -1,11 +1,11 @@
 __all__ = (
     "CommentService",
     "ReactionService",
+    "TicketQueryService",
     "TicketService",
-    "TicketViewService",
 )
 
 from .comment import CommentService
 from .reaction import ReactionService
 from .ticket import TicketService
-from .ticket_view import TicketViewService
+from .ticket_query import TicketQueryService

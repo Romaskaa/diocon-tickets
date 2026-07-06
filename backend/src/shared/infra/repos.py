@@ -1,14 +1,15 @@
 import abc
+from collections.abc import Callable
 from uuid import UUID
 
-from sqlalchemy import Select, delete, exists, func, select, update
+from sqlalchemy import Select, delete, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import Base
 
+from ..domain.dtos import TimeRangeFilters
 from ..domain.entities import Entity
 from ..schemas import Page, Pagination
-from ..utils.time import current_datetime
 
 
 class ModelMapper[EntityT: Entity, ModelT: Base](abc.ABC):
@@ -42,51 +43,39 @@ class SqlAlchemyRepository[EntityT: Entity, ModelT: Base]:
         model = result.scalar_one_or_none()
         return None if model is None else self.model_mapper.to_entity(model)
 
-    async def paginate(self, params: Pagination) -> Page[EntityT]:
-
-        # 1. Основной запрос для получения данных
+    async def paginate(self, pagination: Pagination) -> Page[EntityT]:
         stmt = select(self.model).order_by(self.model.created_at.desc())
+        return await self._paginate(stmt, pagination)
 
-        # 2. Запрос для подсчёта общего количества записей
-        count_stmt = select(func.count()).select_from(stmt.subquery())
+    async def _paginate(
+            self,
+            stmt: Select[tuple[ModelT]],
+            pagination: Pagination,
+            *,
+            model_mapper: Callable[[ModelT], EntityT] | None = None,
+    ) -> Page[EntityT]:
+        if model_mapper is None:
+            model_mapper = self.model_mapper.to_entity
 
-        # 3. Запрос для пагинации записей
-        paginate_stmt = stmt.offset(params.offset).limit(params.size)
-
-        # 4. Выполнение запросов
-        count_result = await self.session.execute(count_stmt)
-        total = count_result.scalar_one()
-        if total == 0:
-            return Page.create([], total, params.page, params.size)
-
-        results = await self.session.execute(paginate_stmt)
-        models = results.scalars().all()
-
-        # 5. Маппинг моделей БД в доменные сущности и формирование результата
-        return Page.create(
-            items=[self.model_mapper.to_entity(model) for model in models],
-            total_items=total,
-            page=params.page,
-            size=params.size,
-        )
-
-    async def _paginate(self, stmt: Select, params: Pagination) -> Page[EntityT]:
-        # 1. Получение общего количества
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total_items = await self.session.scalar(count_stmt)
         if total_items == 0:
-            return Page.create([], total_items, params.page, params.size)
+            return Page.create([], total_items, pagination.page, pagination.size)
 
-        # 2. Получение страницы
-        stmt = stmt.order_by(self.model.created_at.desc()).offset(params.offset).limit(params.size)
+        stmt = (
+            stmt
+            .order_by(self.model.created_at.desc())
+            .offset(pagination.offset)
+            .limit(pagination.size)
+        )
         results = await self.session.execute(stmt)
         models = results.scalars().all()
 
         return Page.create(
-            items=[self.model_mapper.to_entity(model) for model in models],
+            items=[model_mapper(model) for model in models],
             total_items=total_items,
-            page=params.page,
-            size=params.size,
+            page=pagination.page,
+            size=pagination.size,
         )
 
     async def update(self, entity: EntityT) -> None:
@@ -105,6 +94,17 @@ class SqlAlchemyRepository[EntityT: Entity, ModelT: Base]:
         stmt = select(self.model).where(self.model.id.in_(ids))
         results = await self.session.execute(stmt)
         return [self.model_mapper.to_entity(model) for model in results.scalars().all()]
+
+    def _apply_time_range_filters(
+            self, stmt: Select[tuple[ModelT]], filters: TimeRangeFilters,
+    ) -> Select[tuple[ModelT]]:
+        if filters.created_after:
+            stmt = stmt.where(self.model.created_at >= filters.created_after)
+
+        if filters.created_before:
+            stmt = stmt.where(self.model.created_at <= filters.created_before)
+
+        return stmt
 
 
 class InMemoryRepository[EntityT: Entity]:

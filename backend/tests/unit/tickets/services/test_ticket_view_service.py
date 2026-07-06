@@ -6,15 +6,15 @@ from src.iam.domain.vo import UserRole
 from src.iam.schemas import CurrentUser
 from src.shared.schemas import Pagination
 from src.tickets.domain.vo import TicketNumber
-from src.tickets.services import TicketViewService
+from src.tickets.services import TicketQueryService
 
 
 @pytest.fixture
 def ticket_view_service(fake_ticket_repo, ticket_scope_service, ticket_data_loader):
-    return TicketViewService(
+    return TicketQueryService(
         ticket_repo=fake_ticket_repo,
         ticket_scope_service=ticket_scope_service,
-        ticket_data_loader=ticket_data_loader,
+        reference_loader=ticket_data_loader,
     )
 
 

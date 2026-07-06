@@ -13,13 +13,13 @@ from .dependencies import (
     CommentServiceDep,
     ReactionServiceDep,
     TicketFiltersDep,
+    TicketQueryServiceDep,
     TicketRepoDep,
     TicketServiceDep,
-    TicketViewServiceDep,
 )
 from .domain.vo import ReactionType
 from .infra.ai import suggest_ticket_fields
-from .mappers import map_ticket_to_preview, map_ticket_to_response
+from .mappers import map_ticket_to_response
 from .schemas import (
     CommentCreate,
     CommentEdit,
@@ -31,9 +31,7 @@ from .schemas import (
     TicketCreate,
     TicketEdit,
     TicketPredict,
-    TicketPreview,
     TicketResponse,
-    TicketStatusChange,
     TicketViewResponse,
 )
 
@@ -53,22 +51,6 @@ async def create_ticket(
 
 
 @router.get(
-    path="/me",
-    status_code=status.HTTP_200_OK,
-    response_model=Page[TicketPreview],
-    summary="Получить мои заявки",
-    description="Заявки, у которых пользователь инициатор"
-)
-async def get_my_tickets(
-        current_subject: CurrentSubjectDep,
-        pagination: PaginationDep,
-        repository: TicketRepoDep,
-) -> Page[TicketPreview]:
-    page = await repository.get_by_reporter(current_user.user_id, pagination)
-    return page.to_response(map_ticket_to_preview)
-
-
-@router.get(
     path="",
     status_code=status.HTTP_200_OK,
     response_model=Page[TicketViewResponse],
@@ -83,7 +65,7 @@ async def get_tickets(
         current_user: CurrentUserDep,
         pagination: PaginationDep,
         filters: TicketFiltersDep,
-        service: TicketViewServiceDep,
+        service: TicketQueryServiceDep,
 ) -> Page[TicketViewResponse]:
     return await service.get_tickets(
         current_user=current_user,
@@ -116,10 +98,10 @@ async def get_ticket(ticket_id: UUID, repository: TicketRepoDep) -> TicketRespon
 async def update_ticket(
         ticket_id: UUID,
         data: TicketEdit,
-        current_user: CurrentUserDep,
+        current_subject: CurrentSubjectDep,
         service: TicketServiceDep,
 ) -> TicketResponse:
-    return await service.edit(ticket_id, data, edited_by=current_user.user_id)
+    return await service.edit(ticket_id, data, current_subject=current_subject)
 
 
 @router.post(
@@ -132,37 +114,13 @@ async def update_ticket(
 async def assign_ticket(
         ticket_id: UUID,
         data: TicketAssign,
-        current_user: CurrentUserDep,
+        current_subject: CurrentSubjectDep,
         service: TicketServiceDep,
 ) -> TicketResponse:
     return await service.assign(
         ticket_id=ticket_id,
         assignee_id=data.assignee_id,
-        current_user=current_user,
-    )
-
-
-@router.patch(
-    path="/{ticket_id}/status",
-    status_code=status.HTTP_200_OK,
-    response_model=TicketResponse,
-    summary="Изменение статуса тикета",
-    responses={
-        200: {"description": "Статус успешно изменён"},
-        403: {"description": "Недостаточно прав для изменения статуса"},
-        404: {"description": "Тикет не найден"},
-    }
-)
-async def change_ticket_status(
-        ticket_id: UUID,
-        data: TicketStatusChange,
-        current_user: CurrentUserDep,
-        service: TicketServiceDep,
-) -> TicketResponse:
-    return await service.change_status(
-        ticket_id=ticket_id,
-        new_status=data.status,
-        current_subject=current_user,
+        current_subject=current_subject,
     )
 
 
@@ -174,9 +132,9 @@ async def change_ticket_status(
     description="Soft-delete метод, не удаляет тикет фактически (добавляет в архив)",
 )
 async def delete_ticket(
-        ticket_id: UUID, current_user: CurrentUserDep, service: TicketServiceDep
+        ticket_id: UUID, current_subject: CurrentSubjectDep, service: TicketServiceDep
 ) -> TicketResponse:
-    return await service.archive(ticket_id=ticket_id, current_subject=current_user)
+    return await service.archive(ticket_id=ticket_id, current_subject=current_subject)
 
 
 @router.get(

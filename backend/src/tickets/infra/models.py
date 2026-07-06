@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...media.infra.models import AttachmentOrm
+    from src.media.infra.models import AttachmentOrm
 
 from datetime import datetime
 from uuid import UUID
@@ -10,9 +10,11 @@ from sqlalchemy import TEXT, Computed, DateTime, Enum, ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ...core.database import Base
-from ...iam.domain.vo import UserRole
-from ..domain.vo import CommentType, Priority, ReactionType, TicketStatus, TicketType
+from src.core.database import Base
+from src.iam.domain.vo import UserRole
+from src.shared.domain.vo import Priority
+
+from ..domain.vo import CommentType, ReactionType, TicketStatus, TicketType
 
 
 class TicketOrm(Base):
@@ -35,7 +37,6 @@ class TicketOrm(Base):
     tags: Mapped[list[dict[str, str]]] = mapped_column(JSONB)
 
     comments: Mapped[list["CommentOrm"]] = relationship(back_populates="ticket")
-    history: Mapped[list["TicketHistoryEntryOrm"]] = relationship(back_populates="ticket")
     attachments: Mapped[list["AttachmentOrm"]] = relationship(
         primaryjoin=(
             "and_(AttachmentOrm.owner_type=='ticket', "
@@ -109,16 +110,3 @@ class ReactionOrm(Base):
         ),
         Index("ix_reactions_comment_author", "comment_id", "author_id"),
     )
-
-
-class TicketHistoryEntryOrm(Base):
-    __tablename__ = "ticket_history_entries"
-
-    ticket_id: Mapped[UUID] = mapped_column(ForeignKey("tickets.id"), unique=False)
-    actor_id: Mapped[UUID]
-    action: Mapped[str]
-    old_value: Mapped[str | None] = mapped_column(nullable=True)
-    new_value: Mapped[str | None] = mapped_column(nullable=True)
-    description: Mapped[str] = mapped_column(TEXT)
-
-    ticket: Mapped["TicketOrm"] = relationship(back_populates="history")

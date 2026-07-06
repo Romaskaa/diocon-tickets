@@ -25,7 +25,7 @@ class TicketRelations:
     project_map: dict[UUID, str] = field(default_factory=dict)
 
 
-class TicketDataLoader:
+class TicketReferenceLoader:
     def __init__(
             self,
             users_fetcher: Callable[[list[UUID]], Awaitable[list[User]]],
