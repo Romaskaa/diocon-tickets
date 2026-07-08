@@ -4,7 +4,12 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from .service.stage.export import ProjectStagesReport
+from .services.stage.export import ProjectStagesReport
+
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
 HEADERS = [
@@ -13,9 +18,9 @@ HEADERS = [
     "Статус",
     "Плановое начало",
     "Плановое завершение",
-    "Фактическое нало",
-    "Фактичнское завершение",
-    "Ответсвенный",
+    "Фактическое начало",
+    "Фактическое завершение",
+    "Ответственный",
     "Просрочен",
     "Длительность (дни)",
     "Описание",
@@ -81,6 +86,60 @@ def export_project_stages_to_excel(report: ProjectStagesReport) -> bytes:
     return output.getvalue()
 
 def export_project_stages_to_pdf(report: ProjectStagesReport) -> bytes:
+    """
+    Сформировтаь PDF-файл отчета по этапам проекта.
+    """
 
+    output = BytesIO()
+    document = SimpleDocTemplate(
+        output,
+        pagesize=landscape(A4),
+        leftMargin=24,
+        rightMargin=24,
+        topMargin=24,
+        bottomMargin=24,
+    )
+
+    styles = getSampleStyleSheet()
+    elements = [
+        Paragraph(f"Отчет по этапам проекта: {report.project_name}", styles["Title"]),
+        Paragraph(f"Ключ проекта: {report.project_key}", styles["Normal"]),
+        Paragraph(f"Статус проекта: {report.project_status}", styles["Normal"]),
+        Paragraph(f"Дата формирования: {report.generated_at:%d.%m.%Y %H:%M}", styles["Normal"]),
+        Spacer(1, 12),
+    ]
+
+    data = [HEADERS]
+    for row in report.rows:
+        data.append([
+            row.number,
+            row.name,
+            row.status,
+            row.planned_start,
+            row.planned_end,
+            row.started_at,
+            row.completed_at,
+            row.responsible_id,
+            row.is_overdue,
+            row.planned_duration_days,
+            row.description,
+            row.completion_critetia,
+        ])
+
+    table = Table(data, repeatRows=1)
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4F81BD")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("FONTSIZE", (0, 0), (-1, -1), 7),
+    ]))
+
+    elements.append(table)
+    document.build(elements)
+
+    return output.getvalue()
 
 def export_project_stages_to_word(report: ProjectStagesReport) -> bytes:
+    raise NotImplementedError
