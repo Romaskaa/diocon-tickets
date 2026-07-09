@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from html import escape
 from io import BytesIO
+from pathlib import Path
 
 from docx import Document
 from docx.enum.section import WD_ORIENT
@@ -16,7 +17,9 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 if TYPE_CHECKING:
@@ -36,6 +39,10 @@ HEADERS = [
     "Описание",
     "Критерии завершения",
 ]
+
+PDF_FONT_NAME = "ProjectReportFont"
+PDF_BOLD_FONT_NAME = "ProjectReportFontBold"
+PDF_TABLE_COLUMN_WIDTHS = [22, 70, 45, 58, 64, 64, 70, 80, 42, 58, 110, 110]
 
 
 def export_project_stages_to_excel(report: ProjectStagesReport) -> bytes:
@@ -104,6 +111,8 @@ def export_project_stages_to_pdf(report: ProjectStagesReport) -> bytes:
     Сформировать PDF-файл отчёта по этапам проекта.
     """
 
+    regular_font, bold_font = _register_pdf_fonts()
+
     output = BytesIO()
     document = SimpleDocTemplate(
         output,
@@ -115,6 +124,27 @@ def export_project_stages_to_pdf(report: ProjectStagesReport) -> bytes:
     )
 
     styles = getSampleStyleSheet()
+    styles["Title"].fontName = bold_font
+    styles["Normal"].fontName = regular_font
+
+    table_header_style = ParagraphStyle(
+        name="ProjectStagesTableHeader",
+        parent=styles["Normal"],
+        fontName=bold_font,
+        fontSize=6,
+        leading=7,
+        textColor=colors.white,
+        alignment=1,
+    )
+    table_cell_style = ParagraphStyle(
+        name="ProjectStagesTableCell",
+        parent=styles["Normal"],
+        fontName=regular_font,
+        fontSize=6,
+        leading=7,
+        wordWrap="CJK",
+    )
+
     project_url = escape(report.project_url)
     elements = [
         Paragraph(f"Отчёт по этапам проекта: {escape(report.project_name)}", styles["Title"]),
@@ -127,34 +157,40 @@ def export_project_stages_to_pdf(report: ProjectStagesReport) -> bytes:
         Spacer(1, 12),
     ]
 
-    data = [HEADERS]
+    data = [[_pdf_cell(header, table_header_style) for header in HEADERS]]
     data.extend(
         [
-            row.number,
-            row.name,
-            row.status,
-            row.planned_start,
-            row.planned_end,
-            row.started_at,
-            row.completed_at,
-            row.responsible,
-            row.is_overdue,
-            row.planned_duration_days,
-            row.description,
-            row.completion_criteria,
+            _pdf_cell(row.number, table_cell_style),
+            _pdf_cell(row.name, table_cell_style),
+            _pdf_cell(row.status, table_cell_style),
+            _pdf_cell(row.planned_start, table_cell_style),
+            _pdf_cell(row.planned_end, table_cell_style),
+            _pdf_cell(row.started_at, table_cell_style),
+            _pdf_cell(row.completed_at, table_cell_style),
+            _pdf_cell(row.responsible, table_cell_style),
+            _pdf_cell(row.is_overdue, table_cell_style),
+            _pdf_cell(row.planned_duration_days, table_cell_style),
+            _pdf_cell(row.description, table_cell_style),
+            _pdf_cell(row.completion_criteria, table_cell_style),
         ]
         for row in report.rows
     )
 
-    table = Table(data, repeatRows=1)
+    table = Table(
+        data,
+        colWidths=PDF_TABLE_COLUMN_WIDTHS,
+        hAlign="LEFT",
+        repeatRows=1,
+    )
     table.setStyle(
         TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4F81BD")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
             ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("FONTSIZE", (0, 0), (-1, -1), 7),
+            ("LEFTPADDING", (0, 0), (-1, -1), 3),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ])
     )
 
@@ -224,6 +260,44 @@ def export_project_stages_to_word(report: ProjectStagesReport) -> bytes:
     output = BytesIO()
     document.save(output)
     return output.getvalue()
+
+
+def _register_pdf_fonts() -> tuple[str, str]:
+    regular_font_path = _find_font_file([
+        Path("C:/Windows/Fonts/arial.ttf"),
+        Path("C:/Windows/Fonts/calibri.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+        Path("/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf"),
+    ])
+    bold_font_path = _find_font_file([
+        Path("C:/Windows/Fonts/arialbd.ttf"),
+        Path("C:/Windows/Fonts/calibrib.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+        Path("/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf"),
+    ])
+
+    if regular_font_path is None:
+        return "Helvetica", "Helvetica-Bold"
+
+    if PDF_FONT_NAME not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(TTFont(PDF_FONT_NAME, str(regular_font_path)))
+
+    if bold_font_path is None:
+        return PDF_FONT_NAME, PDF_FONT_NAME
+
+    if PDF_BOLD_FONT_NAME not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(TTFont(PDF_BOLD_FONT_NAME, str(bold_font_path)))
+
+    return PDF_FONT_NAME, PDF_BOLD_FONT_NAME
+
+
+def _find_font_file(candidates: list[Path]) -> Path | None:
+    return next((path for path in candidates if path.exists()), None)
+
+
+def _pdf_cell(value: object, style: ParagraphStyle) -> Paragraph:
+    text = escape(str(value)).replace("\n", "<br/>")
+    return Paragraph(text, style)
 
 
 def _add_hyperlink(paragraph, text: str, url: str) -> None:
